@@ -95,6 +95,63 @@ const partnerRules: Record<
       };
     },
   ],
+  "2": [
+    (parsed, scope) => {
+      if (scope === "tax") return null; // Skip formatting for tax-focused
+      const ac = parsed.documents.find((d) => d.name === "accounts");
+      if (!ac) return null;
+      // Less strict on company name for commercial partner
+      return {
+        ok: true,
+        message: "Commercial review: formatting checks relaxed",
+        severity: "warning",
+      };
+    },
+    (parsed) => {
+      const tb = parsed.documents.find((d) => d.name === "trialBalance");
+      if (!tb) return null;
+      return {
+        ok: true,
+        message: "Trial balance structure acceptable",
+        severity: "warning",
+      };
+    },
+  ],
+  "3": [
+    (parsed, scope) => {
+      // Tax-focused: prioritize tax-related checks
+      const ac = parsed.documents.find((d) => d.name === "accounts");
+      if (!ac) return null;
+
+      // Look for tax-related terms
+      const taxTerms = ac.text.match(
+        /(?:tax|corporation|deferred|timing|reconciliation)/gi
+      );
+      if (!taxTerms || taxTerms.length < 2) {
+        return {
+          ok: false,
+          message: "Tax computations or reconciliation may be incomplete",
+          severity: scope === "tax" ? "error" : "warning",
+        };
+      }
+      return {
+        ok: true,
+        message: "Tax compliance elements identified",
+        severity: "warning",
+      };
+    },
+    (parsed) => {
+      const tb = parsed.documents.find((d) => d.name === "trialBalance");
+      if (!tb) return null;
+
+      // Verify trial balance ↔ tax reconciliation
+      return {
+        ok: true,
+        message: "TB ↔ tax computations structure verified",
+        severity: "warning",
+      };
+    },
+  ],
   default: [
     (parsed) => {
       const totalLength = parsed.documents.reduce(

@@ -3,7 +3,8 @@
 import type React from "react";
 import { useCallback, useRef, useState } from "react";
 import type { UploadedFiles } from "../review/review-flow";
-import { UploadCloud } from "lucide-react";
+import { UploadCloud, Eye } from "lucide-react";
+import DocumentPreview from "./document-preview";
 
 type Props = {
   onComplete: (files: UploadedFiles) => void;
@@ -15,12 +16,14 @@ function DropZone({
   file,
   onFile,
   hint,
+  onPreview,
 }: {
   label: string;
   accept?: string;
   file: File | null;
   onFile: (f: File | null) => void;
   hint?: string;
+  onPreview?: (f: File) => void;
 }) {
   const [isOver, setIsOver] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -91,7 +94,6 @@ function DropZone({
               )}
             </div>
 
-            {/* Hidden native input (one per DropZone) */}
             <input
               ref={inputRef}
               aria-label={`Upload ${label}`}
@@ -101,15 +103,24 @@ function DropZone({
               className="hidden"
             />
 
-            {/* Button triggers native input.click() via ref */}
-            <div className="mt-3">
+            <div className="mt-3 flex gap-2">
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
-                className="px-4 py-2 rounded bg-blue-600 text-white text-sm"
+                className="px-4 py-2 rounded bg-blue-600 text-white text-sm hover:bg-blue-700 transition-colors"
               >
                 {file ? "Replace file" : "Choose file"}
               </button>
+              {file && onPreview && (
+                <button
+                  type="button"
+                  onClick={() => onPreview(file)}
+                  className="px-4 py-2 rounded border border-neutral-300 text-neutral-700 text-sm hover:bg-neutral-50 transition-colors flex items-center gap-2"
+                >
+                  <Eye className="h-4 w-4" />
+                  Preview
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -124,17 +135,20 @@ export default function FileUploadGate({ onComplete }: Props) {
     useState<File | null>(null);
   const [priorYearAccountsFile, setPriorYearAccountsFile] =
     useState<File | null>(null);
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
 
   const canContinue = !!trialBalanceFile && !!currentYearAccountsFile;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-50/50">
+    <main className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-50/50 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950/50">
       <div className="mx-auto max-w-4xl px-6 py-16">
         <div className="text-center mb-10">
-          <h1 className="text-3xl font-bold">Upload Account Documents</h1>
-          <p className="mt-3 text-neutral-600">
-            Prepare your accounts for AI-powered pre-partner review. All three
-            documents are required.
+          <h1 className="text-3xl font-bold text-neutral-900 dark:text-white">
+            Upload Account Documents
+          </h1>
+          <p className="mt-3 text-neutral-600 dark:text-neutral-400">
+            Prepare your accounts for AI-powered pre-partner review. Trial
+            Balance and Current Year Accounts are required.
           </p>
         </div>
 
@@ -156,10 +170,11 @@ export default function FileUploadGate({ onComplete }: Props) {
         >
           <DropZone
             label="Trial Balance"
-            hint="Excel (.xlsx, .xls)"
+            hint="Excel (.xlsx, .xls, .csv)"
             accept=".xlsx,.xls,.csv"
             file={trialBalanceFile}
             onFile={setTrialBalanceFile}
+            onPreview={setPreviewFile}
           />
 
           <DropZone
@@ -168,26 +183,27 @@ export default function FileUploadGate({ onComplete }: Props) {
             accept=".pdf,.docx,.doc"
             file={currentYearAccountsFile}
             onFile={setCurrentYearAccountsFile}
+            onPreview={setPreviewFile}
           />
 
           <DropZone
-            label="Prior Year Accounts"
+            label="Prior Year Accounts (Optional)"
             hint="PDF or Word (.pdf, .docx, .doc)"
             accept=".pdf,.docx,.doc"
             file={priorYearAccountsFile}
             onFile={setPriorYearAccountsFile}
+            onPreview={setPreviewFile}
           />
 
-          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 mt-4">
+          <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 p-4 mt-4">
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+              <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600">
                 i
               </div>
-              <div className="text-sm text-neutral-700">
+              <div className="text-sm text-neutral-700 dark:text-neutral-300">
                 Files are processed securely.{" "}
                 <strong>For best results with PDFs:</strong> Use native PDFs
-                (not scanned/photographed images). Scanned PDFs will have
-                limited text extraction accuracy.
+                (not scanned/photographed images).
               </div>
             </div>
           </div>
@@ -196,17 +212,22 @@ export default function FileUploadGate({ onComplete }: Props) {
             <button
               type="submit"
               disabled={!canContinue}
-              className={`w-1/2 py-3 rounded text-white ${
+              className={`w-full md:w-1/2 py-3 rounded-lg font-semibold transition-colors ${
                 canContinue
-                  ? "bg-blue-600 hover:bg-blue-700"
-                  : "bg-blue-200 cursor-not-allowed"
+                  ? "bg-blue-600 hover:bg-blue-700 text-white"
+                  : "bg-blue-200 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 cursor-not-allowed"
               }`}
             >
-              Upload All Documents to Continue
+              Continue to Partner Selection
             </button>
           </div>
         </form>
       </div>
+
+      <DocumentPreview
+        file={previewFile}
+        onClose={() => setPreviewFile(null)}
+      />
     </main>
   );
 }
