@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { AlertCircle, Loader } from "lucide-react";
 import PartnerSelection from "./partner-selection";
 import ReviewConfiguration from "./review-configuration";
 import ReviewResults from "./review-results";
+import { generateReviewId } from "@/lib/utils/review-id-generator";
 
 // exported type so parent and uploader share the same shape
 export type UploadedFiles = {
@@ -20,6 +21,12 @@ type ReviewFlowProps = {
 export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
   const [step, setStep] = useState<"partner" | "config" | "results">("partner");
   const [selectedPartner, setSelectedPartner] = useState<any>(null);
+  const [reviewId, setReviewId] = useState<string>("");
+  const [uploadedFileNames, setUploadedFileNames] = useState<{
+    trialBalance: string;
+    currentYearAccounts: string;
+    priorYearAccounts?: string;
+  } | null>(null);
   const [reviewResults, setReviewResults] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -99,7 +106,9 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
       setError(null);
       setIsLoading(true);
 
-      // Debug logs to browser console
+      const newReviewId = generateReviewId();
+      setReviewId(newReviewId);
+
       console.log("DEBUG uploadedFiles (browser):", uploadedFiles);
       console.log(
         "trialBalance instanceof File:",
@@ -115,7 +124,6 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
         uploadedFiles.currentYearAccounts
       );
 
-      // Recover Files (convert data URLs / envelopes if necessary)
       const acFile = await recoverFile(
         uploadedFiles.currentYearAccounts,
         "accounts.pdf"
@@ -160,9 +168,22 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
 
       const results = await response.json();
 
+      const fileNames = {
+        trialBalance:
+          (uploadedFiles.trialBalance as any)?.name || "trial-balance",
+        currentYearAccounts:
+          (uploadedFiles.currentYearAccounts as any)?.name || "accounts",
+        priorYearAccounts:
+          (uploadedFiles.priorYearAccounts as any)?.name || undefined,
+      };
+      setUploadedFileNames(fileNames);
+
       const normalized = {
         ...results,
         errors: Array.isArray(results?.errors) ? results.errors : [],
+        reviewId: newReviewId,
+        uploadedFileNames: fileNames,
+        timestamp: new Date().toISOString(),
       };
 
       setReviewResults(normalized);
@@ -230,6 +251,7 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
     return (
       <ReviewConfiguration
         partner={selectedPartner}
+        uploadedFiles={uploadedFiles}
         onRun={handleReviewRun}
         onBack={() => setStep("partner")}
       />

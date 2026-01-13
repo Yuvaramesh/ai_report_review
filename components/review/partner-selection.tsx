@@ -18,6 +18,7 @@ interface Partner {
   color: string;
   recommended?: boolean;
   details: string;
+  tooltipRules: string[];
 }
 
 const PARTNERS: Partner[] = [
@@ -31,6 +32,11 @@ const PARTNERS: Partner[] = [
     recommended: true,
     details:
       "Enforces all rules without exception. Perfect for establishing baseline quality and identifying all issues.",
+    tooltipRules: [
+      "Accounts must be marked DRAFT",
+      "All policies must match prior year exactly",
+      "Depreciation must be shown separately",
+    ],
   },
   {
     id: 2,
@@ -41,6 +47,11 @@ const PARTNERS: Partner[] = [
     color: "orange",
     recommended: false,
     details: "Relaxes formatting checks. More lenient on policy changes.",
+    tooltipRules: [
+      "DRAFT status preferred (not required)",
+      "Policy changes allowed with explanation",
+      "Balance sheet must balance",
+    ],
   },
   {
     id: 3,
@@ -51,6 +62,11 @@ const PARTNERS: Partner[] = [
     color: "amber",
     recommended: false,
     details: "Focuses on TB ↔ tax computations. Tolerates layout differences.",
+    tooltipRules: [
+      "Tax reconciliation is critical",
+      "Trial balance must match tax computation",
+      "Deferred tax must be calculated",
+    ],
   },
   {
     id: 4,
@@ -61,6 +77,11 @@ const PARTNERS: Partner[] = [
     color: "green",
     recommended: false,
     details: "Emphasizes clarity. Less rigid about historic consistency.",
+    tooltipRules: [
+      "Material policy changes allowed",
+      "Balance sheet must balance",
+      "Tax must reconcile",
+    ],
   },
   {
     id: 5,
@@ -71,6 +92,11 @@ const PARTNERS: Partner[] = [
     color: "blue",
     recommended: false,
     details: "Obsessed with headings, order, and comparatives.",
+    tooltipRules: [
+      "Consistent heading order required",
+      "Balance sheet presentation matters",
+      "Comparative consistency important",
+    ],
   },
   {
     id: 6,
@@ -81,6 +107,11 @@ const PARTNERS: Partner[] = [
     color: "green",
     recommended: false,
     details: "Wants only real problems. 3–5 points maximum.",
+    tooltipRules: [
+      "Only critical errors flagged",
+      "Balance sheet must balance",
+      "Minimal presentation requirements",
+    ],
   },
   {
     id: 7,
@@ -91,10 +122,19 @@ const PARTNERS: Partner[] = [
     color: "red",
     recommended: false,
     details: "Similar to Partner 1 + extra disclosure emphasis.",
+    tooltipRules: [
+      "Strict compliance like Partner 1",
+      "Extra disclosure requirements",
+      "Tax and policies must be precise",
+    ],
   },
 ];
 
 export default function PartnerSelection({ onSelect }: PartnerSelectionProps) {
+  const handleSelectPartner = (partner: any) => {
+    onSelect(partner);
+  };
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-50/50 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950/50">
       <div className="mx-auto max-w-6xl px-6 py-16">
@@ -119,8 +159,8 @@ export default function PartnerSelection({ onSelect }: PartnerSelectionProps) {
               </p>
               <p className="text-sm text-neutral-600 dark:text-neutral-400 mt-1">
                 Partner 1 is the strictest benchmark. If accounts pass Partner
-                1, they will likely satisfy Partners 2–6. Start with Partner 1
-                to catch all issues upfront.
+                1, they will likely satisfy Partners 2–6. Hover over partner
+                cards to see key rules for each profile.
               </p>
             </div>
           </div>
@@ -131,7 +171,7 @@ export default function PartnerSelection({ onSelect }: PartnerSelectionProps) {
               <PartnerCard
                 key={partner.id}
                 partner={partner}
-                onSelect={onSelect}
+                onSelect={handleSelectPartner}
               />
             ))}
           </div>

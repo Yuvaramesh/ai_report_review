@@ -3,15 +3,18 @@
 import { useState } from "react";
 import { ChevronLeft, CheckCircle2, ShieldAlert } from "lucide-react";
 import PartnerRulesDisplay from "./partner-rules-display";
+import type { UploadedFiles } from "./review-flow";
 
 interface ReviewConfigurationProps {
   partner: any;
+  uploadedFiles?: UploadedFiles;
   onRun: (config: any) => void;
   onBack: () => void;
 }
 
 export default function ReviewConfiguration({
   partner,
+  uploadedFiles,
   onRun,
   onBack,
 }: ReviewConfigurationProps) {
@@ -46,6 +49,12 @@ export default function ReviewConfiguration({
     setIsRunning(false);
   };
 
+  const trialBalanceName =
+    (uploadedFiles?.trialBalance as any)?.name || "Trial Balance";
+  const accountsName =
+    (uploadedFiles?.currentYearAccounts as any)?.name ||
+    "Current Year Accounts";
+
   return (
     <main className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-50/50 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950/50">
       <div className="mx-auto max-w-4xl px-6 py-16">
@@ -75,6 +84,16 @@ export default function ReviewConfiguration({
                   {partner.name} – {partner.title}
                 </span>
               </p>
+
+              <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700 space-y-1 text-sm">
+                <p className="text-neutral-600 dark:text-neutral-400">
+                  <span className="font-medium">Files uploaded:</span>
+                </p>
+                <ul className="ml-4 space-y-1 text-neutral-600 dark:text-neutral-400">
+                  <li>• {trialBalanceName}</li>
+                  <li>• {accountsName}</li>
+                </ul>
+              </div>
             </div>
 
             {/* Content */}

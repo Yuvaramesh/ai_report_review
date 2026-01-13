@@ -9,8 +9,13 @@ import {
   AlertTriangle,
   FileText,
   Share2,
+  Copy,
 } from "lucide-react";
 import { saveReview } from "@/lib/review-history";
+import {
+  getPartnerProfile,
+  getStrictnessBadgeColor,
+} from "@/lib/utils/partner-utils";
 
 type ReviewResultShape = {
   errors?: Array<any>;
@@ -21,6 +26,13 @@ type ReviewResultShape = {
   partnerId?: string | number | null;
   scope?: string | null;
   message?: string;
+  reviewId?: string;
+  uploadedFileNames?: {
+    trialBalance: string;
+    currentYearAccounts: string;
+    priorYearAccounts?: string;
+  };
+  timestamp?: string;
   [k: string]: any;
 };
 
@@ -35,6 +47,9 @@ export default function ReviewResults({
 }: ReviewResultsProps) {
   const [isExporting, setIsExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
+  const [savingToDb, setSavingToDb] = useState(false);
 
   const errors = Array.isArray(results?.errors) ? results!.errors : [];
   const warnings = Array.isArray(results?.warnings) ? results!.warnings : [];
@@ -42,6 +57,119 @@ export default function ReviewResults({
   const isReadyForPartner = errors.length === 0;
   const partnerName =
     results?.summary?.partnerName || `Partner ${results?.partnerId}`;
+  const partnerId = Number(results?.partnerId) || 1;
+  const partnerProfile = getPartnerProfile(partnerId);
+  const profileType = partnerProfile.profileType;
+  const strictnessBadgeColor = getStrictnessBadgeColor(
+    partnerProfile.strictness
+  );
+
+  const reviewId = results?.reviewId || "N/A";
+  const timestamp = results?.timestamp
+    ? new Date(results.timestamp).toLocaleString()
+    : new Date().toLocaleString();
+
+  const generateReviewSummary = () => {
+    return `AI Accounts Review Summary
+================================
+Review ID: ${reviewId}
+Partner: ${partnerName} (${profileType})
+Strictness: ${partnerProfile.strictness}
+Review Scope: ${results?.scope || "full"}
+Timestamp: ${timestamp}
+
+Status: ${isReadyForPartner ? "✓ Ready for Partner" : "⚠ Review Required"}
+
+Findings:
+- Errors: ${errors.length}
+- Warnings: ${warnings.length}
+
+Files Reviewed:
+- Trial Balance: ${results?.uploadedFileNames?.trialBalance || "N/A"}
+- Current Year Accounts: ${
+      results?.uploadedFileNames?.currentYearAccounts || "N/A"
+    }
+
+${
+  errors.length > 0
+    ? `\nErrors:\n${errors
+        .map(
+          (e, i) =>
+            `${i + 1}. ${
+              typeof e === "string" ? e : e?.message || JSON.stringify(e)
+            }`
+        )
+        .join("\n")}`
+    : ""
+}
+
+${
+  warnings.length > 0
+    ? `\nWarnings:\n${warnings
+        .map(
+          (w, i) =>
+            `${i + 1}. ${
+              typeof w === "string" ? w : w?.message || JSON.stringify(w)
+            }`
+        )
+        .join("\n")}`
+    : ""
+}
+`;
+  };
+
+  const handleCopyId = () => {
+    navigator.clipboard.writeText(reviewId);
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 2000);
+  };
+
+  const handleCopySummary = () => {
+    const summary = generateReviewSummary();
+    navigator.clipboard.writeText(summary);
+    setCopiedSummary(true);
+    setTimeout(() => setCopiedSummary(false), 2000);
+  };
+
+  const handleSaveToDatabase = async () => {
+    setSavingToDb(true);
+    try {
+      const reviewData = {
+        reviewId,
+        partnerId,
+        partnerName,
+        profileType,
+        scope: results?.scope || "full",
+        status: isReadyForPartner ? "ready" : "needs-review",
+        errorCount: errors.length,
+        warningCount: warnings.length,
+        errors,
+        warnings,
+        uploadedFileNames: results?.uploadedFileNames || {},
+        timestamp,
+      };
+
+      const response = await fetch("/api/save-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reviewData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.warn(
+          "[v0] Database save warning:",
+          errorData.warning || errorData.error
+        );
+      } else {
+        console.log("[v0] Review saved to MongoDB successfully");
+      }
+    } catch (err) {
+      console.error("[v0] Error saving to database:", err);
+    } finally {
+      setSavingToDb(false);
+    }
+  };
 
   const handleExportPDF = async () => {
     try {
@@ -91,7 +219,6 @@ export default function ReviewResults({
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3000);
 
-      // Save to history
       if (results?.partnerId) {
         saveReview({
           partnerId: String(results.partnerId),
@@ -101,11 +228,16 @@ export default function ReviewResults({
           errorCount: errors.length,
           warningCount: warnings.length,
           files: {
-            trialBalance: "trial-balance.xlsx",
-            currentYearAccounts: "accounts.pdf",
+            trialBalance:
+              results?.uploadedFileNames?.trialBalance || "trial-balance.xlsx",
+            currentYearAccounts:
+              results?.uploadedFileNames?.currentYearAccounts || "accounts.pdf",
           },
         });
       }
+
+      // Save to database after export
+      await handleSaveToDatabase();
     } catch (err) {
       console.error("[v0] Export error:", err);
       alert(err instanceof Error ? err.message : "Export failed");
@@ -121,6 +253,7 @@ export default function ReviewResults({
         <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 pb-6">
           <div>
             <h1 className="text-4xl font-bold text-neutral-900 dark:text-white flex items-center gap-3">
+              <span className="text-3xl">{partnerProfile.icon}</span>
               {isReadyForPartner ? (
                 <>
                   <CheckCircle2 className="h-8 w-8 text-success" />
@@ -133,10 +266,22 @@ export default function ReviewResults({
                 </>
               )}
             </h1>
-            <p className="text-neutral-600 dark:text-neutral-400 mt-2">
-              {partnerName} • {new Date().toLocaleDateString()} •{" "}
-              {results?.scope || "full"} review
-            </p>
+            <div className="mt-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-neutral-900 dark:text-white">
+                  {partnerName}
+                </span>
+                <span
+                  className={`text-xs font-bold px-2 py-1 rounded-full ${strictnessBadgeColor}`}
+                >
+                  {partnerProfile.strictness}
+                </span>
+              </div>
+              <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                {profileType} • Reviewed on {timestamp} •{" "}
+                {results?.scope || "full"} review
+              </p>
+            </div>
           </div>
           <div className="flex gap-3">
             <button
@@ -193,23 +338,101 @@ export default function ReviewResults({
               ) : (
                 <AlertCircle className="h-6 w-6 text-error flex-shrink-0 mt-1" />
               )}
-              <div>
+              <div className="flex-1">
                 <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">
                   Summary
                 </h2>
                 <p className="text-neutral-700 dark:text-neutral-300">
                   {results?.message || "Review completed"}
                 </p>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  {/* Review ID Card */}
+                  <div className="bg-white dark:bg-neutral-900 p-4 rounded-lg border border-neutral-200 dark:border-neutral-800">
+                    <p className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 mb-1">
+                      Review ID
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <code className="text-sm font-mono text-neutral-900 dark:text-white">
+                        {reviewId}
+                      </code>
+                      <button
+                        onClick={handleCopyId}
+                        className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded transition-colors"
+                        title="Copy Review ID"
+                      >
+                        {copiedId ? (
+                          <CheckCircle2 className="h-4 w-4 text-success" />
+                        ) : (
+                          <Copy className="h-4 w-4 text-neutral-400" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Files Info Card */}
+                  <div className="bg-white dark:bg-neutral-900 p-4 rounded-lg border border-neutral-200 dark:border-neutral-800">
+                    <p className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 mb-2">
+                      Files Reviewed
+                    </p>
+                    <ul className="text-xs text-neutral-700 dark:text-neutral-300 space-y-1">
+                      <li>
+                        <span className="font-medium">TB:</span>{" "}
+                        {results?.uploadedFileNames?.trialBalance ||
+                          "trial-balance"}
+                      </li>
+                      <li>
+                        <span className="font-medium">Accounts:</span>{" "}
+                        {results?.uploadedFileNames?.currentYearAccounts ||
+                          "accounts"}
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div
+                  className={`mt-4 p-4 rounded-lg border ${partnerProfile.borderColor} ${partnerProfile.bgColor}`}
+                >
+                  <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
+                    Partner Profile
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <span className="font-medium">Name:</span> {profileType}
+                    </div>
+                    <div>
+                      <span className="font-medium">Strictness:</span>{" "}
+                      {partnerProfile.strictness}
+                    </div>
+                    <div>
+                      <span className="font-medium">Rules:</span>{" "}
+                      {partnerProfile.ruleCount}
+                    </div>
+                    <div>
+                      <span className="font-medium">Scope:</span>{" "}
+                      {results?.scope || "full"}
+                    </div>
+                  </div>
+                </div>
+
                 <pre className="mt-4 bg-white dark:bg-neutral-900 p-4 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs overflow-x-auto">
                   {JSON.stringify(
                     {
                       partnerId: results?.partnerId,
                       partnerName,
+                      profileType,
+                      strictness: partnerProfile.strictness,
+                      reviewId,
                       scope: results?.scope || "full",
                       status: isReadyForPartner
                         ? "Ready for Partner"
                         : "Review Required",
-                      timestamp: new Date().toISOString(),
+                      timestamp: timestamp,
+                      filesReviewed: {
+                        trialBalance: results?.uploadedFileNames?.trialBalance,
+                        currentYearAccounts:
+                          results?.uploadedFileNames?.currentYearAccounts,
+                      },
                     },
                     null,
                     2
@@ -305,14 +528,36 @@ export default function ReviewResults({
         {/* Footer Actions */}
         <div className="flex justify-between items-center border-t border-neutral-200 dark:border-neutral-800 pt-6">
           <div className="text-sm text-neutral-600 dark:text-neutral-400">
-            Review completed at {new Date().toLocaleTimeString()}
+            Review ID: <span className="font-mono">{reviewId}</span>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={handleCopySummary}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors ${
+                copiedSummary
+                  ? "border-success bg-success/10 text-success"
+                  : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
+              }`}
+              title="Copy review summary to clipboard"
+            >
+              {copiedSummary ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4" />
+                  Copy Summary
+                </>
+              )}
+            </button>
+
             <button
               onClick={() => {
                 navigator.share?.({
                   title: "AI Review Results",
-                  text: `AI Accounts Review - ${partnerName}`,
+                  text: `AI Accounts Review - ${partnerName} (${reviewId})`,
                 });
               }}
               className="flex items-center gap-2 px-4 py-2 rounded-lg border border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
