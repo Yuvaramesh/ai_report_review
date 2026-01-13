@@ -1,24 +1,26 @@
-"use server";
 import { NextResponse } from "next/server";
+import * as XLSX from "xlsx";
 import { parseDocumentsWithAI, applyPartnerRules } from "@/lib/review";
-import util from "util";
+import { extractPDFTextWithFallback } from "@/lib/ai/pdf-extractor";
 
-/**
- * Robust file reader for formData values returned by req.formData().get(...)
- * Tries text(), arrayBuffer(), stream(), Buffer-like etc.
- */
-async function fileToText(file: any): Promise<string> {
+async function fileToBuffer(file: any): Promise<Buffer> {
   if (file == null) throw new Error("No file provided");
 
-  if (typeof file === "string") return file;
+  if (typeof Buffer !== "undefined" && Buffer.isBuffer(file)) {
+    return file;
+  }
 
-  if (typeof file.text === "function") {
-    return await file.text();
+  if (
+    file.buffer &&
+    typeof Buffer !== "undefined" &&
+    Buffer.isBuffer(file.buffer)
+  ) {
+    return file.buffer;
   }
 
   if (typeof file.arrayBuffer === "function") {
     const ab = await file.arrayBuffer();
-    return new TextDecoder().decode(ab);
+    return Buffer.from(ab);
   }
 
   if (typeof file.stream === "function") {
@@ -29,83 +31,64 @@ async function fileToText(file: any): Promise<string> {
       const { done, value } = await reader.read();
       if (done) break;
       if (value) {
-        if (typeof value === "string") {
-          chunks.push(new TextEncoder().encode(value));
-        } else {
-          chunks.push(value);
-        }
+        chunks.push(Buffer.from(value));
       }
     }
-    const length = chunks.reduce((s, c) => s + c.length, 0);
-    const merged = new Uint8Array(length);
-    let offset = 0;
-    for (const c of chunks) {
-      merged.set(c, offset);
-      offset += c.length;
-    }
-    return new TextDecoder().decode(merged);
+    return Buffer.concat(chunks);
   }
 
-  // multer-style: file.buffer
-  if (typeof Buffer !== "undefined") {
-    if (file.buffer && Buffer.isBuffer(file.buffer)) {
-      return file.buffer.toString("utf-8");
+  if (typeof file === "string") {
+    if (file.startsWith("data:")) {
+      const comma = file.indexOf(",");
+      const base64 = file.slice(comma + 1);
+      return Buffer.from(base64, "base64");
     }
-    if (Buffer.isBuffer(file)) {
-      return file.toString("utf-8");
-    }
+    return Buffer.from(file, "utf8");
   }
 
-  // Typed arrays / ArrayBuffer
-  if (file instanceof ArrayBuffer) {
-    return new TextDecoder().decode(new Uint8Array(file));
-  }
-  if (ArrayBuffer.isView(file)) {
-    return new TextDecoder().decode(
-      new Uint8Array(file.buffer, file.byteOffset, file.byteLength)
-    );
+  if (file instanceof ArrayBuffer) return Buffer.from(file);
+  if (ArrayBuffer.isView(file))
+    return Buffer.from(file.buffer, file.byteOffset, file.byteLength);
+
+  throw new Error("Unsupported file object shape");
+}
+
+async function extractTextFromBuffer(
+  buffer: Buffer,
+  filename?: string,
+  mime?: string
+): Promise<string> {
+  const header = buffer.slice(0, 8).toString("utf8", 0, 8);
+
+  // PDF detection and extraction
+  if (header.startsWith("%PDF")) {
+    return await extractPDFTextWithFallback(buffer, filename);
   }
 
-  // Some multipart libraries put the file content in `data` or `content`
+  // XLSX/Excel detection
+  const zipHeader = buffer.slice(0, 4).toString("hex");
   if (
-    file.data &&
-    (file.data instanceof Uint8Array ||
-      (typeof Buffer !== "undefined" && Buffer.isBuffer(file.data)))
+    zipHeader === "504b0304" ||
+    (filename && filename.toLowerCase().endsWith(".xlsx")) ||
+    (mime && String(mime).includes("spreadsheet"))
   ) {
-    const payload = file.data;
-    if (typeof Buffer !== "undefined" && Buffer.isBuffer(payload))
-      return payload.toString("utf-8");
-    return new TextDecoder().decode(payload);
+    try {
+      const wb = XLSX.read(buffer, { type: "buffer" });
+      const sheetTexts: string[] = [];
+      for (const sheetName of wb.SheetNames) {
+        const sheet = wb.Sheets[sheetName];
+        const csv = XLSX.utils.sheet_to_csv(sheet);
+        sheetTexts.push(`=== SHEET: ${sheetName} ===\n${csv}`);
+      }
+      return sheetTexts.join("\n\n");
+    } catch (err) {
+      console.error("[v0] xlsx parse error:", err);
+      throw new Error("Failed to extract text from spreadsheet");
+    }
   }
-  if (
-    file.content &&
-    (file.content instanceof Uint8Array ||
-      (typeof Buffer !== "undefined" && Buffer.isBuffer(file.content)))
-  ) {
-    const payload = file.content;
-    if (typeof Buffer !== "undefined" && Buffer.isBuffer(payload))
-      return payload.toString("utf-8");
-    return new TextDecoder().decode(payload);
-  }
 
-  const debug = {
-    typeOf: typeof file,
-    constructorName: file && file.constructor ? file.constructor.name : null,
-    keys: Array.isArray(file) ? "array" : Object.keys(file || {}),
-    proto:
-      file && Object.getPrototypeOf(file)
-        ? Object.getPrototypeOf(file).constructor?.name
-        : null,
-  };
-
-  console.error(
-    "[v0] Unsupported file object shape in fileToText():",
-    util.inspect(debug, { depth: 2 })
-  );
-
-  throw new Error(
-    "Unsupported file object (no text/arrayBuffer/stream/buffer). Server logged object shape for debugging."
-  );
+  // Fallback: treat as UTF-8 text
+  return buffer.toString("utf8");
 }
 
 export async function POST(req: Request) {
@@ -116,9 +99,6 @@ export async function POST(req: Request) {
     const trialBalanceFile = formData.get("trialBalanceFile");
     const partnerIdRaw = formData.get("partnerId");
     const scope = String(formData.get("scope") ?? "");
-
-    // partnerId may come as string or number
-    const partnerId = partnerIdRaw != null ? String(partnerIdRaw) : null;
 
     if (!accountsFile || !trialBalanceFile) {
       return NextResponse.json(
@@ -131,56 +111,56 @@ export async function POST(req: Request) {
       );
     }
 
-    // Helpful debug: log constructor names so you can confirm File/Blob was received
-    try {
-      console.log("[v0] Received files:", {
-        accountsType: accountsFile?.constructor?.name,
-        trialBalanceType: trialBalanceFile?.constructor?.name,
-      });
-    } catch {}
+    console.log("[v0] Processing files...");
 
-    // Convert files to text (may throw with debugging output)
-    const accountsText = await fileToText(accountsFile);
-    const trialBalanceText = await fileToText(trialBalanceFile);
+    const accountsBuffer = await fileToBuffer(accountsFile);
+    const trialBuffer = await fileToBuffer(trialBalanceFile);
 
-    // Parse/extract document content using a single function (replace with your AI)
-    // after parsing:
-    const parsed = await parseDocumentsWithAI([
-      { name: "accounts", text: accountsText },
-      { name: "trialBalance", text: trialBalanceText },
-    ]);
-
-    // Add this debug log to confirm extracted values:
-    console.log(
-      "[v0] parsed documents:",
-      parsed.documents.map((d) => ({
-        name: d.name,
-        extracted: d.extracted,
-        length: d.text?.length,
-      }))
+    const accountsText = await extractTextFromBuffer(
+      accountsBuffer,
+      (accountsFile as any)?.name,
+      (accountsFile as any)?.type
+    );
+    const trialText = await extractTextFromBuffer(
+      trialBuffer,
+      (trialBalanceFile as any)?.name,
+      (trialBalanceFile as any)?.type
     );
 
+    console.log("[v0] Extracted text lengths:", {
+      accounts: accountsText.length,
+      trial: trialText.length,
+    });
+
+    const parsed = await parseDocumentsWithAI([
+      { name: "accounts", text: accountsText },
+      { name: "trialBalance", text: trialText },
+    ]);
+
+    const partnerId = partnerIdRaw != null ? String(partnerIdRaw) : null;
     const ruleResults = applyPartnerRules(
       String(partnerId ?? "unknown"),
       scope,
       parsed
     );
-    console.log("[v0] ruleResults:", ruleResults);
 
-    // Build response — always include errors array for front-end stability
     const response = {
       partnerId,
       scope,
       parsed,
       rules: ruleResults,
       errors: ruleResults.errors ?? [],
-      message: "Files received, parsed, and rules applied.",
+      warnings: ruleResults.warnings ?? [],
+      message: "Files received, parsed, and rules applied successfully.",
     };
 
     return NextResponse.json(response, { status: 200 });
   } catch (err) {
     console.error("[v0] Review API error:", err);
     const message = err instanceof Error ? err.message : "Unknown server error";
-    return NextResponse.json({ error: message, errors: [] }, { status: 500 });
+    return NextResponse.json(
+      { error: message, errors: [], warnings: [] },
+      { status: 500 }
+    );
   }
 }

@@ -103,7 +103,7 @@ Return ONLY a valid JSON object with this structure:
 
   try {
     const { text } = await generateText({
-      model: "openai/gpt-5-nano",
+      model: "openai/gpt-4o mini",
       prompt,
     });
 
@@ -154,7 +154,7 @@ Return ONLY valid JSON:
 
   try {
     const { text } = await generateText({
-      model: "openai/gpt-5-nano",
+      model: "openai/gpt-4o mini",
       prompt,
     });
 

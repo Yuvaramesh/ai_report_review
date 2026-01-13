@@ -1,6 +1,3 @@
-// Simple parsing + rules example — replace parseDocumentsWithAI with your real AI/parsing implementation.
-// This module returns a consistent `parsed` shape and `rules` results for the API above.
-
 export type ParsedDocument = {
   name: string;
   text: string;
@@ -13,17 +10,15 @@ export async function parseDocumentsWithAI(
   documents: ParsedDocument[];
   meta?: Record<string, any>;
 }> {
-  // Simple placeholder parser: try to detect numeric totals or headings via regex.
   const parsed: ParsedDocument[] = docs.map((d) => {
     const text = d.text ?? "";
 
-    // Attempt to find a "Total assets" line or "Total" followed by number
     const totalMatch = text.match(
-      /(?:total assets|total)\s*[:\-]?\s*([\d,\.]+)/i
+      /(?:total assets|total)\s*[:-]?\s*([\d,.\-()]+)/i
     );
-    const yearMatch = text.match(/(\b20\d{2}\b)/); // naive year extraction
+    const yearMatch = text.match(/(\b20\d{2}\b)/);
     const companyMatch = text.match(
-      /(Company|Entity|Name)\s*[:\-]?\s*([A-Za-z0-9 &.,-]+)/i
+      /(Company|Entity|Name)\s*[:-]?\s*([A-Za-z0-9 &.,-]+)/i
     );
 
     const extracted: Record<string, any> = {};
@@ -31,27 +26,18 @@ export async function parseDocumentsWithAI(
     if (yearMatch) extracted.year = yearMatch[1];
     if (companyMatch) extracted.company = companyMatch[2].trim();
 
-    return {
-      name: d.name,
-      text,
-      extracted,
-    };
+    return { name: d.name, text, extracted };
   });
 
-  // If you want to call an LLM or OCR service, do it here and fill extracted fields.
   return { documents: parsed, meta: { parsedAt: new Date().toISOString() } };
 }
 
-/**
- * Example set of partner rules. In a real app load from DB.
- * Each partner has an array of rule checkers — simple functions that
- * return { ok: boolean, message: string, severity: 'error'|'warning' }.
- */
 type RuleResult = {
   ok: boolean;
   message: string;
   severity: "error" | "warning";
 };
+
 type RulesOutcome = {
   errors: RuleResult[];
   warnings: RuleResult[];
@@ -67,7 +53,6 @@ const partnerRules: Record<
     ) => RuleResult | null
   >
 > = {
-  // partner "1" expects there to be a total and year present
   "1": [
     (parsed) => {
       const tb = parsed.documents.find((d) => d.name === "trialBalance");
@@ -110,7 +95,6 @@ const partnerRules: Record<
       };
     },
   ],
-  // default partner rules — e.g., require at least some text
   default: [
     (parsed) => {
       const totalLength = parsed.documents.reduce(
@@ -142,9 +126,11 @@ export function applyPartnerRules(
       const r = rule(parsed, scope);
       if (!r) continue;
       if (r.ok === false && r.severity === "error") errors.push(r);
-      else if (r.ok === false && r.severity === "warning") warnings.push(r);
-      else if (r.ok === true && r.severity === "warning") warnings.push(r);
-      // ok:true & severity:error shouldn't happen — treat as warning
+      else if (
+        (r.ok === false && r.severity === "warning") ||
+        (r.ok === true && r.severity === "warning")
+      )
+        warnings.push(r);
     } catch (err) {
       errors.push({
         ok: false,

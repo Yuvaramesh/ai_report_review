@@ -83,7 +83,7 @@ Return ONLY valid JSON (no markdown, no code blocks) matching this exact structu
         Authorization: `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4o mini",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },

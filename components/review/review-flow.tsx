@@ -6,11 +6,11 @@ import PartnerSelection from "./partner-selection";
 import ReviewConfiguration from "./review-configuration";
 import ReviewResults from "./review-results";
 
-// exported type so Home (or other parents) can reuse it if needed
+// exported type so parent and uploader share the same shape
 export type UploadedFiles = {
-  trialBalance: File | null;
-  currentYearAccounts: File | null;
-  priorYearAccounts: File | null;
+  trialBalance: File | string | null; // allow string temporarily (we will recover) but prefer File
+  currentYearAccounts: File | string | null;
+  priorYearAccounts?: File | string | null;
 };
 
 type ReviewFlowProps = {
@@ -29,86 +29,115 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
     setStep("config");
   };
 
-  // (only the handleReviewRun portion is shown - drop into your existing file)
+  // helper: convert data url to File in browser
+  async function dataUrlToFile(dataUrl: string, filename = "file") {
+    const res = await fetch(dataUrl);
+    const blob = await res.blob();
+    return new File([blob], filename, { type: blob.type });
+  }
+
+  // helper: try recover a File from several shapes (File, data URL, JSON envelope, base64)
+  async function recoverFile(
+    value: any,
+    fallbackName: string
+  ): Promise<File | null> {
+    if (!value) return null;
+    // Already a File from input.files[0]
+    if (typeof File !== "undefined" && value instanceof File)
+      return value as File;
+
+    // If value is a Blob
+    if (typeof Blob !== "undefined" && value instanceof Blob) {
+      return new File([value], fallbackName, {
+        type: (value as any).type || "application/octet-stream",
+      });
+    }
+
+    // If string data:
+    if (typeof value === "string") {
+      // Data URL (data:...;base64,...)
+      if (value.startsWith("data:")) {
+        return await dataUrlToFile(value, fallbackName);
+      }
+
+      // JSON-stringified envelope
+      try {
+        const parsed = JSON.parse(value);
+        return await recoverFile(parsed, fallbackName);
+      } catch {
+        // not JSON, maybe plain string (filename) -> cannot recover
+        return null;
+      }
+    }
+
+    // If object with .data (data URL) or .content (base64)
+    if (typeof value === "object") {
+      if (
+        value.data &&
+        typeof value.data === "string" &&
+        value.data.startsWith("data:")
+      ) {
+        return await dataUrlToFile(value.data, value.name || fallbackName);
+      }
+      if (value.content && typeof value.content === "string") {
+        // assume base64
+        const base64 = value.content.replace(/^data:.*;base64,/, "");
+        const binary = atob(base64);
+        const arr = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+        return new File([arr], value.name || fallbackName, {
+          type: value.type || "application/octet-stream",
+        });
+      }
+    }
+
+    return null;
+  }
+
   const handleReviewRun = async (config: any) => {
     try {
       setError(null);
       setIsLoading(true);
 
-      const formData = new FormData();
-
-      const { trialBalance, currentYearAccounts } = uploadedFiles;
-
-      // Debug logs - open browser console and confirm these values are File objects
-      console.log("DEBUG uploadedFiles:", {
-        trialBalance,
-        currentYearAccounts,
-      });
+      // Debug logs to browser console
+      console.log("DEBUG uploadedFiles (browser):", uploadedFiles);
       console.log(
         "trialBalance instanceof File:",
-        trialBalance instanceof File
+        uploadedFiles.trialBalance instanceof File
       );
       console.log(
         "currentYearAccounts instanceof File:",
-        currentYearAccounts instanceof File
+        uploadedFiles.currentYearAccounts instanceof File
       );
+      console.log("trialBalance value:", uploadedFiles.trialBalance);
       console.log(
-        "trialBalance keys:",
-        trialBalance ? Object.keys(trialBalance as any) : null
-      );
-      console.log(
-        "currentYearAccounts keys:",
-        currentYearAccounts ? Object.keys(currentYearAccounts as any) : null
+        "currentYearAccounts value:",
+        uploadedFiles.currentYearAccounts
       );
 
-      // Validate
-      if (!trialBalance || !currentYearAccounts) {
-        throw new Error("Trial balance and accounts files are required");
+      // Recover Files (convert data URLs / envelopes if necessary)
+      const acFile = await recoverFile(
+        uploadedFiles.currentYearAccounts,
+        "accounts.pdf"
+      );
+      const tbFile = await recoverFile(
+        uploadedFiles.trialBalance,
+        "trial-balance.pdf"
+      );
+
+      if (!acFile || !tbFile) {
+        throw new Error(
+          "Trial balance and accounts files must be provided as actual File objects. Ensure your uploader stores input.files[0] in state."
+        );
       }
 
       if (!selectedPartner) {
         throw new Error("Partner selection is required");
       }
 
-      // Helper: convert data:base64 URI to Blob/File
-      async function dataUrlToFile(dataUrl: string, filename = "file") {
-        // Use fetch to convert data URL to Blob (works in browser)
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
-        return new File([blob], filename, { type: blob.type });
-      }
-
-      // Defensive: if client passed a data URL string, convert
-      let tbToAppend: File | null = null;
-      let acToAppend: File | null = null;
-
-      if (typeof trialBalance === "string") {
-        if (trialBalance.startsWith("data:")) {
-          tbToAppend = await dataUrlToFile(trialBalance, "trial-balance");
-        } else {
-          // likely a filename or metadata — can't upload local file from filename only
-          throw new Error(
-            "Trial balance was not a File. Ensure your uploader passes the actual File object (input.files[0])."
-          );
-        }
-      } else {
-        tbToAppend = trialBalance as File;
-      }
-
-      if (typeof currentYearAccounts === "string") {
-        if (currentYearAccounts.startsWith("data:")) {
-          acToAppend = await dataUrlToFile(currentYearAccounts, "accounts");
-        } else {
-          throw new Error(
-            "Accounts was not a File. Ensure your uploader passes the actual File object (input.files[0])."
-          );
-        }
-      } else {
-        acToAppend = currentYearAccounts as File;
-      }
-
-      formData.append("accountsFile", acToAppend as File);
-      formData.append("trialBalanceFile", tbToAppend as File);
+      const formData = new FormData();
+      formData.append("accountsFile", acFile);
+      formData.append("trialBalanceFile", tbFile);
       formData.append(
         "partnerId",
         String(selectedPartner.id ?? selectedPartner)
@@ -135,6 +164,7 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
         ...results,
         errors: Array.isArray(results?.errors) ? results.errors : [],
       };
+
       setReviewResults(normalized);
       setStep("results");
     } catch (err) {
@@ -148,18 +178,19 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
       setIsLoading(false);
     }
   };
+
   if (error) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-50/50 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950/50 flex items-center justify-center p-6">
+      <main className="min-h-screen flex items-center justify-center p-6">
         <div className="max-w-md w-full">
-          <div className="rounded-2xl border-2 border-error bg-error-light p-8 space-y-6">
+          <div className="rounded-2xl border-2 border-red-500 bg-red-50 p-8 space-y-6">
             <div className="flex items-start gap-4">
-              <AlertCircle className="h-6 w-6 text-error flex-shrink-0 mt-0.5" />
+              <AlertCircle className="h-6 w-6 text-red-600 flex-shrink-0 mt-0.5" />
               <div>
-                <h2 className="text-xl font-bold text-error">
+                <h2 className="text-xl font-bold text-red-600">
                   Error Running Review
                 </h2>
-                <p className="text-sm text-error/80 mt-2">{error}</p>
+                <p className="text-sm text-red-700 mt-2">{error}</p>
               </div>
             </div>
             <button
@@ -176,15 +207,13 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-50/50 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950/50 flex items-center justify-center">
+      <main className="min-h-screen flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="inline-flex">
-            <Loader className="h-12 w-12 animate-spin text-primary" />
+            <Loader className="h-12 w-12 animate-spin text-blue-600" />
           </div>
-          <h2 className="text-2xl font-bold text-neutral-900 dark:text-white">
-            Running AI Review
-          </h2>
-          <p className="text-neutral-600 dark:text-neutral-400">
+          <h2 className="text-2xl font-bold">Running AI Review</h2>
+          <p className="text-neutral-600">
             Parsing documents and running validations... This may take 30-60
             seconds.
           </p>
@@ -220,6 +249,5 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
     );
   }
 
-  // fallback (shouldn't happen)
   return null;
 }

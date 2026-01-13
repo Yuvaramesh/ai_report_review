@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, CheckCircle2, Loader, ShieldAlert } from "lucide-react";
+import { ChevronLeft, CheckCircle2, ShieldAlert } from "lucide-react";
+import PartnerRulesDisplay from "./partner-rules-display";
 
 interface ReviewConfigurationProps {
   partner: any;
@@ -47,7 +48,7 @@ export default function ReviewConfiguration({
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-50/50 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950/50">
-      <div className="mx-auto max-w-3xl px-6 py-16">
+      <div className="mx-auto max-w-4xl px-6 py-16">
         <div className="space-y-8">
           {/* Back Button */}
           <button
@@ -57,6 +58,9 @@ export default function ReviewConfiguration({
             <ChevronLeft className="h-5 w-5" />
             Back to Partner Selection
           </button>
+
+          {/* Partner Rules Display */}
+          <PartnerRulesDisplay partnerId={partner?.id} scope={scope} />
 
           {/* Main Card */}
           <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900/50 overflow-hidden">
@@ -175,7 +179,7 @@ export default function ReviewConfiguration({
           >
             {isRunning ? (
               <>
-                <Loader className="h-5 w-5 animate-spin" />
+                <span className="animate-spin">◌</span>
                 Running Review (30-60 seconds)
               </>
             ) : (

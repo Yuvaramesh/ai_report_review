@@ -14,7 +14,6 @@ export async function POST(request: Request) {
     const generator = new PDFGenerator();
     const html = generator.generateHTML(results);
 
-    // Return HTML for client-side PDF generation
     return new Response(
       JSON.stringify({
         success: true,
