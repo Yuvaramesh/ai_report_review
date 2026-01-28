@@ -16,7 +16,7 @@ interface Partner {
   description: string;
   strictness: Strictness;
   color: string;
-  recommended?: boolean;
+  recommended: boolean;
   details: string;
   tooltipRules: string[];
 }

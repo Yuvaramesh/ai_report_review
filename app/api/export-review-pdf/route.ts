@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import html2pdf from "html2pdf.js";
 
 export async function POST(req: Request) {
   try {
@@ -8,37 +7,25 @@ export async function POST(req: Request) {
     if (!body?.results) {
       return NextResponse.json(
         { error: "No results provided" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const { results } = body;
     const html = generateReportHTML(results);
 
-    // Convert HTML to PDF using html2pdf.js
-    const options = {
-      margin: 10,
-      filename: "review-report.pdf",
-      image: { type: "jpeg", quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-    };
-
-    const pdf = await html2pdf().set(options).from(html).toPdf();
-    const pdfBlob = pdf.output("blob");
-
-    return new NextResponse(pdfBlob, {
+    // Return HTML that can be printed to PDF by the browser
+    return new NextResponse(html, {
       status: 200,
       headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": 'attachment; filename="review-report.pdf"',
+        "Content-Type": "text/html",
       },
     });
   } catch (err) {
     console.error("[v0] export error:", err);
     return NextResponse.json(
       { error: "Server error generating export" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -57,7 +44,7 @@ function generateReportHTML(results: any): string {
         <tr>
           <td class="px-6 py-3 border-b border-gray-200">${idx + 1}</td>
           <td class="px-6 py-3 border-b border-gray-200">${escapeHtml(
-            message
+            message,
           )}</td>
           <td class="px-6 py-3 border-b border-gray-200">
             <span class="px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800">Error</span>
@@ -77,7 +64,7 @@ function generateReportHTML(results: any): string {
             errors.length + idx + 1
           }</td>
           <td class="px-6 py-3 border-b border-gray-200">${escapeHtml(
-            message
+            message,
           )}</td>
           <td class="px-6 py-3 border-b border-gray-200">
             <span class="px-3 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">Warning</span>
@@ -312,6 +299,15 @@ function generateReportHTML(results: any): string {
       background-color: #d1d5db;
     }
   </style>
+  <script>
+    // Auto-print on load (user can cancel)
+    window.onload = function() {
+      // Give the page a moment to render
+      setTimeout(function() {
+        window.print();
+      }, 500);
+    };
+  </script>
 </head>
 <body>
   <div class="container">

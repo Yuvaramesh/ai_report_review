@@ -12,7 +12,7 @@ interface PartnerCardProps {
     title: string;
     description: string;
     details: string;
-    tooltipRules?: string[];
+    tooltipRules: string[];
   };
   onSelect: (partner: any) => void;
   isProtected?: boolean;
