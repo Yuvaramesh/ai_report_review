@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import { parseDocumentsWithAI, applyPartnerRules } from "@/lib/review";
+import { parseDocumentsWithAI } from "@/lib/ai/openai-parser";
 import { extractPDFTextWithFallback } from "@/lib/ai/pdf-extractor";
+import { ReviewEngine } from "@/lib/engine/review-engine";
 
 async function fileToBuffer(file: any): Promise<Buffer> {
   if (file == null) throw new Error("No file provided");
@@ -56,7 +57,7 @@ async function fileToBuffer(file: any): Promise<Buffer> {
 async function extractTextFromBuffer(
   buffer: Buffer,
   filename?: string,
-  mime?: string
+  mime?: string,
 ): Promise<string> {
   const header = buffer.slice(0, 8).toString("utf8", 0, 8);
 
@@ -82,7 +83,7 @@ async function extractTextFromBuffer(
       }
       return sheetTexts.join("\n\n");
     } catch (err) {
-      console.error("[v0] xlsx parse error:", err);
+      console.error("[AI Review] xlsx parse error:", err);
       throw new Error("Failed to extract text from spreadsheet");
     }
   }
@@ -97,8 +98,10 @@ export async function POST(req: Request) {
 
     const accountsFile = formData.get("accountsFile");
     const trialBalanceFile = formData.get("trialBalanceFile");
+    const priorYearAccountsFile = formData.get("priorYearAccountsFile"); // NEW: Optional prior year
     const partnerIdRaw = formData.get("partnerId");
     const scope = String(formData.get("scope") ?? "");
+    const useAI = String(formData.get("useAI") ?? "true") === "true"; // NEW: AI toggle
 
     if (!accountsFile || !trialBalanceFile) {
       return NextResponse.json(
@@ -107,60 +110,108 @@ export async function POST(req: Request) {
             "Missing files: accountsFile and trialBalanceFile are required.",
           errors: [],
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    console.log("[v0] Processing files...");
+    console.log(
+      `[AI Review] Processing files with AI ${useAI ? "enabled" : "disabled"}...`,
+    );
 
+    // Extract current year files
     const accountsBuffer = await fileToBuffer(accountsFile);
     const trialBuffer = await fileToBuffer(trialBalanceFile);
 
     const accountsText = await extractTextFromBuffer(
       accountsBuffer,
       (accountsFile as any)?.name,
-      (accountsFile as any)?.type
+      (accountsFile as any)?.type,
     );
     const trialText = await extractTextFromBuffer(
       trialBuffer,
       (trialBalanceFile as any)?.name,
-      (trialBalanceFile as any)?.type
+      (trialBalanceFile as any)?.type,
     );
 
-    console.log("[v0] Extracted text lengths:", {
+    console.log("[AI Review] Extracted text lengths:", {
       accounts: accountsText.length,
       trial: trialText.length,
     });
 
-    const parsed = await parseDocumentsWithAI([
-      { name: "accounts", text: accountsText },
-      { name: "trialBalance", text: trialText },
-    ]);
+    // Parse current year with AI
+    console.log("[AI Review] Parsing documents with AI...");
+    const parsed = await parseDocumentsWithAI([accountsText, trialText]);
 
-    const partnerId = partnerIdRaw != null ? String(partnerIdRaw) : null;
-    const ruleResults = applyPartnerRules(
-      String(partnerId ?? "unknown"),
-      scope,
-      parsed
+    // Extract and parse prior year if provided
+    let priorYearParsed = null;
+    if (priorYearAccountsFile) {
+      try {
+        console.log("[AI Review] Processing prior year accounts...");
+        const priorBuffer = await fileToBuffer(priorYearAccountsFile);
+        const priorText = await extractTextFromBuffer(
+          priorBuffer,
+          (priorYearAccountsFile as any)?.name,
+          (priorYearAccountsFile as any)?.type,
+        );
+
+        priorYearParsed = await parseDocumentsWithAI([priorText]);
+        console.log("[AI Review] Prior year parsed successfully");
+      } catch (error) {
+        console.error("[AI Review] Prior year parsing failed:", error);
+        // Continue without prior year comparison
+      }
+    }
+
+    const partnerId = partnerIdRaw != null ? Number(partnerIdRaw) : 1;
+
+    // Run enhanced review with AI
+    console.log(
+      `[AI Review] Running ${useAI ? "AI-enhanced" : "traditional"} review for Partner ${partnerId}...`,
     );
+    const engine = new ReviewEngine(partnerId, useAI);
+    const reviewResults = await engine.runReview(
+      parsed,
+      null, // trialBalance data would be extracted from parsed
+      priorYearParsed,
+      scope,
+    );
+
+    console.log("[AI Review] Review completed:", {
+      errors: reviewResults.errors.length,
+      queries: reviewResults.queries.length,
+      presentation: reviewResults.presentation.length,
+      aiEnhanced: reviewResults.aiEnhanced,
+    });
 
     const response = {
       partnerId,
       scope,
       parsed,
-      rules: ruleResults,
-      errors: ruleResults.errors ?? [],
-      warnings: ruleResults.warnings ?? [],
-      message: "Files received, parsed, and rules applied successfully.",
+      errors: reviewResults.errors,
+      queries: reviewResults.queries,
+      presentation: reviewResults.presentation,
+      warnings: [], // For backward compatibility
+      totalFindings: reviewResults.totalFindings,
+      aiEnhanced: reviewResults.aiEnhanced,
+      executiveSummary: reviewResults.executiveSummary,
+      aiInsights: reviewResults.aiInsights,
+      message:
+        reviewResults.executiveSummary || "Review completed successfully.",
     };
 
     return NextResponse.json(response, { status: 200 });
   } catch (err) {
-    console.error("[v0] Review API error:", err);
+    console.error("[AI Review] API error:", err);
     const message = err instanceof Error ? err.message : "Unknown server error";
     return NextResponse.json(
-      { error: message, errors: [], warnings: [] },
-      { status: 500 }
+      {
+        error: message,
+        errors: [],
+        warnings: [],
+        queries: [],
+        presentation: [],
+      },
+      { status: 500 },
     );
   }
 }

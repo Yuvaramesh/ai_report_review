@@ -10,6 +10,10 @@ import {
   FileText,
   Share2,
   Copy,
+  Sparkles,
+  Brain,
+  TrendingUp,
+  Info,
 } from "lucide-react";
 import { saveReview } from "@/lib/review-history";
 import {
@@ -19,6 +23,8 @@ import {
 
 type ReviewResultShape = {
   errors?: Array<any>;
+  queries?: Array<any>;
+  presentation?: Array<any>;
   warnings?: Array<any>;
   summary?: Record<string, any>;
   parsed?: any;
@@ -33,6 +39,9 @@ type ReviewResultShape = {
     priorYearAccounts?: string;
   };
   timestamp?: string;
+  aiEnhanced?: boolean; // NEW
+  executiveSummary?: string; // NEW
+  aiInsights?: Array<{ type: string; [key: string]: any }>; // NEW
   [k: string]: any;
 };
 
@@ -41,7 +50,7 @@ type ReviewResultsProps = {
   onReset: () => void;
 };
 
-export default function ReviewResults({
+export default function ReviewResultsEnhanced({
   results,
   onReset,
 }: ReviewResultsProps) {
@@ -49,9 +58,13 @@ export default function ReviewResults({
   const [exportSuccess, setExportSuccess] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
   const [copiedSummary, setCopiedSummary] = useState(false);
-  const [savingToDb, setSavingToDb] = useState(false);
+  const [showAIInsights, setShowAIInsights] = useState(true);
 
   const errors = Array.isArray(results?.errors) ? results!.errors : [];
+  const queries = Array.isArray(results?.queries) ? results!.queries : [];
+  const presentation = Array.isArray(results?.presentation)
+    ? results!.presentation
+    : [];
   const warnings = Array.isArray(results?.warnings) ? results!.warnings : [];
 
   const isReadyForPartner = errors.length === 0;
@@ -61,7 +74,7 @@ export default function ReviewResults({
   const partnerProfile = getPartnerProfile(partnerId);
   const profileType = partnerProfile.profileType;
   const strictnessBadgeColor = getStrictnessBadgeColor(
-    partnerProfile.strictness
+    partnerProfile.strictness,
   );
 
   const reviewId = results?.reviewId || "N/A";
@@ -69,54 +82,19 @@ export default function ReviewResults({
     ? new Date(results.timestamp).toLocaleString()
     : new Date().toLocaleString();
 
-  const generateReviewSummary = () => {
-    return `AI Accounts Review Summary
-================================
-Review ID: ${reviewId}
-Partner: ${partnerName} (${profileType})
-Strictness: ${partnerProfile.strictness}
-Review Scope: ${results?.scope || "full"}
-Timestamp: ${timestamp}
+  const aiEnhanced = results?.aiEnhanced || false;
+  const executiveSummary = results?.executiveSummary;
+  const aiInsights = results?.aiInsights || [];
 
-Status: ${isReadyForPartner ? "✓ Ready for Partner" : "⚠ Review Required"}
-
-Findings:
-- Errors: ${errors.length}
-- Warnings: ${warnings.length}
-
-Files Reviewed:
-- Trial Balance: ${results?.uploadedFileNames?.trialBalance || "N/A"}
-- Current Year Accounts: ${
-      results?.uploadedFileNames?.currentYearAccounts || "N/A"
-    }
-
-${
-  errors.length > 0
-    ? `\nErrors:\n${errors
-        .map(
-          (e, i) =>
-            `${i + 1}. ${
-              typeof e === "string" ? e : e?.message || JSON.stringify(e)
-            }`
-        )
-        .join("\n")}`
-    : ""
-}
-
-${
-  warnings.length > 0
-    ? `\nWarnings:\n${warnings
-        .map(
-          (w, i) =>
-            `${i + 1}. ${
-              typeof w === "string" ? w : w?.message || JSON.stringify(w)
-            }`
-        )
-        .join("\n")}`
-    : ""
-}
-`;
-  };
+  // Separate AI-generated findings from rule-based ones
+  const aiFindings = [
+    ...errors.filter((e) => e.source?.includes("ai")),
+    ...queries.filter((q) => q.source?.includes("ai")),
+  ];
+  const ruleBasedFindings = [
+    ...errors.filter((e) => !e.source?.includes("ai")),
+    ...queries.filter((q) => !q.source?.includes("ai")),
+  ];
 
   const handleCopyId = () => {
     navigator.clipboard.writeText(reviewId);
@@ -125,50 +103,27 @@ ${
   };
 
   const handleCopySummary = () => {
-    const summary = generateReviewSummary();
+    const summary = `AI Accounts Review Summary
+================================
+Review ID: ${reviewId}
+Partner: ${partnerName} (${profileType})
+AI Enhanced: ${aiEnhanced ? "Yes" : "No"}
+Timestamp: ${timestamp}
+
+${executiveSummary || "Review completed successfully."}
+
+Status: ${isReadyForPartner ? "✓ Ready for Partner" : "⚠ Review Required"}
+
+Findings:
+- Errors: ${errors.length}
+- Queries: ${queries.length}
+- Presentation: ${presentation.length}
+
+${aiEnhanced ? `\nAI Insights: ${aiInsights.length} detected\n` : ""}
+`;
     navigator.clipboard.writeText(summary);
     setCopiedSummary(true);
     setTimeout(() => setCopiedSummary(false), 2000);
-  };
-
-  const handleSaveToDatabase = async () => {
-    setSavingToDb(true);
-    try {
-      const reviewData = {
-        reviewId,
-        partnerId,
-        partnerName,
-        profileType,
-        scope: results?.scope || "full",
-        status: isReadyForPartner ? "ready" : "needs-review",
-        errorCount: errors.length,
-        warningCount: warnings.length,
-        errors,
-        warnings,
-        uploadedFileNames: results?.uploadedFileNames || {},
-        timestamp,
-      };
-
-      const response = await fetch("/api/save-review", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(reviewData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.warn(
-          "[v0] Database save warning:",
-          errorData.warning || errorData.error
-        );
-      } else {
-        console.log("[v0] Review saved to MongoDB successfully");
-      }
-    } catch (err) {
-      console.error("[v0] Error saving to database:", err);
-    } finally {
-      setSavingToDb(false);
-    }
   };
 
   const handleExportPDF = async () => {
@@ -212,7 +167,7 @@ ${
 
       const filename = `ai-review-${partnerName.replace(
         /\s+/g,
-        "-"
+        "-",
       )}-${Date.now()}.pdf`;
       pdf.save(filename);
 
@@ -226,7 +181,7 @@ ${
           scope: results?.scope || "full",
           status: isReadyForPartner ? "ready" : "needs-review",
           errorCount: errors.length,
-          warningCount: warnings.length,
+          warningCount: queries.length,
           files: {
             trialBalance:
               results?.uploadedFileNames?.trialBalance || "trial-balance.xlsx",
@@ -235,11 +190,8 @@ ${
           },
         });
       }
-
-      // Save to database after export
-      await handleSaveToDatabase();
     } catch (err) {
-      console.error("[v0] Export error:", err);
+      console.error("[AI Review] Export error:", err);
       alert(err instanceof Error ? err.message : "Export failed");
     } finally {
       setIsExporting(false);
@@ -252,20 +204,28 @@ ${
         {/* Header with Status */}
         <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 pb-6">
           <div>
-            <h1 className="text-4xl font-bold text-neutral-900 dark:text-white flex items-center gap-3">
-              <span className="text-3xl">{partnerProfile.icon}</span>
-              {isReadyForPartner ? (
-                <>
-                  <CheckCircle2 className="h-8 w-8 text-success" />
-                  Ready for Partner
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="h-8 w-8 text-error" />
-                  Review Required
-                </>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-4xl font-bold text-neutral-900 dark:text-white flex items-center gap-3">
+                <span className="text-3xl">{partnerProfile.icon}</span>
+                {isReadyForPartner ? (
+                  <>
+                    <CheckCircle2 className="h-8 w-8 text-success" />
+                    Ready for Partner
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="h-8 w-8 text-error" />
+                    Review Required
+                  </>
+                )}
+              </h1>
+              {aiEnhanced && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary">
+                  <Sparkles className="h-3 w-3" />
+                  AI Enhanced
+                </span>
               )}
-            </h1>
+            </div>
             <div className="mt-3 space-y-1">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-neutral-900 dark:text-white">
@@ -297,8 +257,8 @@ ${
                 exportSuccess
                   ? "bg-success text-white"
                   : isExporting
-                  ? "bg-primary/50 text-white cursor-not-allowed"
-                  : "bg-primary hover:bg-primary/90 text-white"
+                    ? "bg-primary/50 text-white cursor-not-allowed"
+                    : "bg-primary hover:bg-primary/90 text-white"
               }`}
               disabled={isExporting}
             >
@@ -324,6 +284,23 @@ ${
 
         {/* Main Content */}
         <div id="pdf-content" className="space-y-6">
+          {/* Executive Summary (AI-Generated) */}
+          {aiEnhanced && executiveSummary && (
+            <div className="rounded-xl border-2 border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10 p-6">
+              <div className="flex items-start gap-4">
+                <Brain className="h-6 w-6 text-primary flex-shrink-0 mt-1" />
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">
+                    AI Executive Summary
+                  </h2>
+                  <p className="text-neutral-700 dark:text-neutral-300 leading-relaxed">
+                    {executiveSummary}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Summary Card */}
           <div
             className={`rounded-xl border-2 p-6 ${
@@ -340,26 +317,53 @@ ${
               )}
               <div className="flex-1">
                 <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">
-                  Summary
+                  Review Summary
                 </h2>
-                <p className="text-neutral-700 dark:text-neutral-300">
-                  {results?.message || "Review completed"}
-                </p>
+                <div className="grid gap-4 md:grid-cols-3 mt-4">
+                  <div className="bg-white dark:bg-neutral-900 p-4 rounded-lg border border-neutral-200 dark:border-neutral-800">
+                    <p className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 mb-1">
+                      Total Findings
+                    </p>
+                    <p className="text-2xl font-bold text-neutral-900 dark:text-white">
+                      {errors.length + queries.length + presentation.length}
+                    </p>
+                    <div className="flex gap-2 mt-2 text-xs">
+                      <span className="text-error">{errors.length} errors</span>
+                      <span className="text-warning">
+                        {queries.length} queries
+                      </span>
+                      <span className="text-success">
+                        {presentation.length} tips
+                      </span>
+                    </div>
+                  </div>
 
-                <div className="mt-4 grid gap-4 md:grid-cols-2">
-                  {/* Review ID Card */}
+                  {aiEnhanced && (
+                    <div className="bg-white dark:bg-neutral-900 p-4 rounded-lg border border-primary/30 dark:border-primary/20">
+                      <p className="text-xs font-semibold text-primary mb-1 flex items-center gap-1">
+                        <Sparkles className="h-3 w-3" />
+                        AI-Detected Issues
+                      </p>
+                      <p className="text-2xl font-bold text-neutral-900 dark:text-white">
+                        {aiFindings.length}
+                      </p>
+                      <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-2">
+                        Contextual analysis findings
+                      </p>
+                    </div>
+                  )}
+
                   <div className="bg-white dark:bg-neutral-900 p-4 rounded-lg border border-neutral-200 dark:border-neutral-800">
                     <p className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 mb-1">
                       Review ID
                     </p>
                     <div className="flex items-center gap-2">
                       <code className="text-sm font-mono text-neutral-900 dark:text-white">
-                        {reviewId}
+                        {reviewId.substring(0, 20)}...
                       </code>
                       <button
                         onClick={handleCopyId}
                         className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded transition-colors"
-                        title="Copy Review ID"
                       >
                         {copiedId ? (
                           <CheckCircle2 className="h-4 w-4 text-success" />
@@ -369,87 +373,74 @@ ${
                       </button>
                     </div>
                   </div>
-
-                  {/* Files Info Card */}
-                  <div className="bg-white dark:bg-neutral-900 p-4 rounded-lg border border-neutral-200 dark:border-neutral-800">
-                    <p className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 mb-2">
-                      Files Reviewed
-                    </p>
-                    <ul className="text-xs text-neutral-700 dark:text-neutral-300 space-y-1">
-                      <li>
-                        <span className="font-medium">TB:</span>{" "}
-                        {results?.uploadedFileNames?.trialBalance ||
-                          "trial-balance"}
-                      </li>
-                      <li>
-                        <span className="font-medium">Accounts:</span>{" "}
-                        {results?.uploadedFileNames?.currentYearAccounts ||
-                          "accounts"}
-                      </li>
-                    </ul>
-                  </div>
                 </div>
-
-                <div
-                  className={`mt-4 p-4 rounded-lg border ${partnerProfile.borderColor} ${partnerProfile.bgColor}`}
-                >
-                  <p className="text-xs font-semibold text-neutral-700 dark:text-neutral-300 mb-2">
-                    Partner Profile
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <span className="font-medium">Name:</span> {profileType}
-                    </div>
-                    <div>
-                      <span className="font-medium">Strictness:</span>{" "}
-                      {partnerProfile.strictness}
-                    </div>
-                    <div>
-                      <span className="font-medium">Rules:</span>{" "}
-                      {partnerProfile.ruleCount}
-                    </div>
-                    <div>
-                      <span className="font-medium">Scope:</span>{" "}
-                      {results?.scope || "full"}
-                    </div>
-                  </div>
-                </div>
-
-                <pre className="mt-4 bg-white dark:bg-neutral-900 p-4 rounded-lg border border-neutral-200 dark:border-neutral-800 text-xs overflow-x-auto">
-                  {JSON.stringify(
-                    {
-                      partnerId: results?.partnerId,
-                      partnerName,
-                      profileType,
-                      strictness: partnerProfile.strictness,
-                      reviewId,
-                      scope: results?.scope || "full",
-                      status: isReadyForPartner
-                        ? "Ready for Partner"
-                        : "Review Required",
-                      timestamp: timestamp,
-                      filesReviewed: {
-                        trialBalance: results?.uploadedFileNames?.trialBalance,
-                        currentYearAccounts:
-                          results?.uploadedFileNames?.currentYearAccounts,
-                      },
-                    },
-                    null,
-                    2
-                  )}
-                </pre>
               </div>
             </div>
           </div>
+
+          {/* AI Insights Section */}
+          {aiEnhanced && aiInsights.length > 0 && (
+            <div className="rounded-xl border border-primary/30 bg-white dark:bg-neutral-900/50 overflow-hidden">
+              <button
+                onClick={() => setShowAIInsights(!showAIInsights)}
+                className="w-full p-6 flex items-center justify-between hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  <h2 className="text-xl font-bold text-neutral-900 dark:text-white">
+                    AI Insights & Analysis
+                  </h2>
+                  <span className="px-2 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary">
+                    {aiInsights.length} insights
+                  </span>
+                </div>
+                <AlertTriangle
+                  className={`h-5 w-5 text-neutral-400 transition-transform ${
+                    showAIInsights ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              {showAIInsights && (
+                <div className="border-t border-neutral-200 dark:border-neutral-800 p-6 space-y-4">
+                  {aiInsights.map((insight, idx) => (
+                    <div
+                      key={idx}
+                      className="p-4 rounded-lg bg-primary/5 border border-primary/20"
+                    >
+                      <div className="flex items-start gap-3">
+                        <Info className="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-neutral-900 dark:text-white mb-1">
+                            {insight.type.replace(/-/g, " ").toUpperCase()}
+                          </p>
+                          {insight.summary && (
+                            <p className="text-sm text-neutral-700 dark:text-neutral-300">
+                              {insight.summary}
+                            </p>
+                          )}
+                          {insight.count !== undefined && (
+                            <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+                              {insight.count} items analyzed
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Findings Section */}
           <div className="space-y-4">
             <h2 className="text-2xl font-bold text-neutral-900 dark:text-white flex items-center gap-2">
               <FileText className="h-6 w-6" />
-              Findings
+              Detailed Findings
             </h2>
 
-            {errors.length === 0 && warnings.length === 0 ? (
+            {errors.length === 0 && queries.length === 0 ? (
               <div className="rounded-xl border-2 border-success/30 bg-success/5 dark:bg-success/10 p-6">
                 <div className="flex items-center gap-3">
                   <CheckCircle2 className="h-6 w-6 text-success" />
@@ -460,7 +451,7 @@ ${
                 </div>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4">
                 {errors.length > 0 && (
                   <div className="rounded-xl border-2 border-error/30 bg-error/5 dark:bg-error/10 p-6">
                     <div className="flex items-center gap-2 mb-4">
@@ -473,36 +464,58 @@ ${
                       {errors.map((err, idx) => (
                         <li
                           key={idx}
-                          className="text-sm text-neutral-700 dark:text-neutral-300 flex gap-2"
+                          className="text-sm text-neutral-700 dark:text-neutral-300 flex gap-2 items-start"
                         >
-                          <span className="text-error">•</span>
-                          {typeof err === "string"
-                            ? err
-                            : err?.message || JSON.stringify(err)}
+                          <span className="text-error flex-shrink-0">•</span>
+                          <div className="flex-1">
+                            <span>
+                              {typeof err === "string"
+                                ? err
+                                : err?.issue ||
+                                  err?.message ||
+                                  JSON.stringify(err)}
+                            </span>
+                            {err.source?.includes("ai") && (
+                              <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary">
+                                <Sparkles className="h-2.5 w-2.5" />
+                                AI
+                              </span>
+                            )}
+                          </div>
                         </li>
                       ))}
                     </ul>
                   </div>
                 )}
 
-                {warnings.length > 0 && (
+                {queries.length > 0 && (
                   <div className="rounded-xl border-2 border-warning/30 bg-warning/5 dark:bg-warning/10 p-6">
                     <div className="flex items-center gap-2 mb-4">
                       <AlertTriangle className="h-5 w-5 text-warning" />
                       <h3 className="font-bold text-warning">
-                        Warnings ({warnings.length})
+                        Queries ({queries.length})
                       </h3>
                     </div>
                     <ul className="space-y-2">
-                      {warnings.map((w, idx) => (
+                      {queries.map((q, idx) => (
                         <li
                           key={idx}
-                          className="text-sm text-neutral-700 dark:text-neutral-300 flex gap-2"
+                          className="text-sm text-neutral-700 dark:text-neutral-300 flex gap-2 items-start"
                         >
-                          <span className="text-warning">•</span>
-                          {typeof w === "string"
-                            ? w
-                            : w?.message || JSON.stringify(w)}
+                          <span className="text-warning flex-shrink-0">•</span>
+                          <div className="flex-1">
+                            <span>
+                              {typeof q === "string"
+                                ? q
+                                : q?.query || q?.message || JSON.stringify(q)}
+                            </span>
+                            {q.source?.includes("ai") && (
+                              <span className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/10 text-primary">
+                                <Sparkles className="h-2.5 w-2.5" />
+                                AI
+                              </span>
+                            )}
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -511,23 +524,17 @@ ${
               </div>
             )}
           </div>
-
-          {/* Parsed Data */}
-          {results?.parsed && (
-            <div className="rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/50 p-6">
-              <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-4">
-                Parsed Data
-              </h2>
-              <pre className="overflow-auto text-xs bg-neutral-50 dark:bg-neutral-900 p-4 rounded-lg border border-neutral-200 dark:border-neutral-800 max-h-96">
-                {JSON.stringify(results.parsed, null, 2)}
-              </pre>
-            </div>
-          )}
         </div>
 
         {/* Footer Actions */}
         <div className="flex justify-between items-center border-t border-neutral-200 dark:border-neutral-800 pt-6">
           <div className="text-sm text-neutral-600 dark:text-neutral-400">
+            {aiEnhanced && (
+              <span className="inline-flex items-center gap-1 mr-3 text-primary font-medium">
+                <Sparkles className="h-3 w-3" />
+                AI-Enhanced Review
+              </span>
+            )}
             Review ID: <span className="font-mono">{reviewId}</span>
           </div>
           <div className="flex gap-2">
@@ -538,7 +545,6 @@ ${
                   ? "border-success bg-success/10 text-success"
                   : "border-neutral-300 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-700 dark:text-neutral-300"
               }`}
-              title="Copy review summary to clipboard"
             >
               {copiedSummary ? (
                 <>

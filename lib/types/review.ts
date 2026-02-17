@@ -24,6 +24,8 @@ export interface ReviewError {
   tbRef: string;
   action: string;
   severity: "critical" | "high" | "medium";
+  source?: "rule-based" | "ai-validation" | "ai-detection" | "ai-comparison";
+  confidence?: number; // 0-1, only for AI findings
 }
 
 export interface ReviewQuery {
@@ -33,6 +35,8 @@ export interface ReviewQuery {
   location: string;
   evidence: string;
   severity: "high" | "medium" | "low";
+  source?: "rule-based" | "ai-validation" | "ai-detection" | "ai-comparison";
+  confidence?: number;
 }
 
 export interface PresentationItem {
@@ -41,6 +45,7 @@ export interface PresentationItem {
   item: string;
   location: string;
   suggestion: string;
+  source?: "rule-based" | "ai-validation" | "ai-detection" | "ai-comparison";
 }
 
 export type ReviewFinding = ReviewError | ReviewQuery | PresentationItem;
@@ -59,6 +64,12 @@ export interface ReviewResults {
   presentation: PresentationItem[];
   timestamp: string;
   totalFindings: number;
+  aiEnhanced?: boolean; // Whether AI validation was used
+  executiveSummary?: string; // AI-generated summary
+  aiInsights?: Array<{
+    type: string;
+    [key: string]: any;
+  }>; // AI-specific insights
 }
 
 export interface PartnerRuleset {
@@ -92,6 +103,8 @@ export interface ValidationRule {
   category: "error" | "query" | "presentation";
   description: string;
   check: (accountsData: any, trialBalance: any) => ValidationResult | null;
+  requiresAI?: boolean; // NEW: Flag to use AI validation for this rule
+  aiContext?: string; // NEW: Additional context for AI validation
 }
 
 export interface ValidationResult {
