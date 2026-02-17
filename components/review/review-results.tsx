@@ -174,51 +174,60 @@ ${
   const handleExportPDF = async () => {
     try {
       setIsExporting(true);
+      console.log("[v0] Starting PDF export process...");
 
       const { jsPDF } = await import("jspdf");
       const html2canvas = (await import("html2canvas")).default;
 
       const element = document.getElementById("pdf-content");
       if (!element) {
-        throw new Error("PDF content not found");
+        throw new Error("PDF content element not found");
       }
 
-      console.log("[v0] Starting PDF generation...");
+      console.log("[v0] Rendering HTML to canvas with html2canvas...");
       const canvas = await html2canvas(element, {
         scale: 2,
         backgroundColor: "#ffffff",
         allowTaint: true,
         useCORS: true,
+        logging: false,
+        removeContainer: true,
+        windowHeight: element.scrollHeight,
+        windowWidth: element.scrollWidth,
       });
       
-      const imgData = canvas.toDataURL("image/png");
-      console.log("[v0] Canvas converted to image data");
+      console.log("[v0] Canvas rendered successfully, converting to image...");
+      const imgData = canvas.toDataURL("image/png", 0.95);
 
+      console.log("[v0] Creating PDF document...");
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
         format: "a4",
       });
 
-      const imgWidth = 190;
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pageWidth - 20;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
       let heightLeft = imgHeight;
-      let position = 0;
+      let position = 10;
 
       pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
-      heightLeft -= 280;
+      heightLeft -= pageHeight - 20;
 
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight + 10;
         pdf.addPage();
         pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
-        heightLeft -= 280;
+        heightLeft -= pageHeight - 20;
       }
 
       const filename = `ai-review-${partnerName.replace(
         /\s+/g,
         "-"
-      )}-${Date.now()}.pdf`;
+      )}-${new Date().toISOString().split("T")[0]}.pdf`;
       
       console.log("[v0] Saving PDF with filename:", filename);
       pdf.save(filename);
@@ -244,13 +253,12 @@ ${
         });
       }
 
-      // Save to database after export
       await handleSaveToDatabase();
     } catch (err) {
-      console.error("[v0] Export error:", err);
+      console.error("[v0] PDF export error:", err);
       const errorMsg = err instanceof Error ? err.message : "Export failed";
-      console.error("[v0] Export error details:", errorMsg);
-      alert(`Failed to export PDF: ${errorMsg}`);
+      console.error("[v0] Error details:", errorMsg);
+      alert(`Failed to export PDF: ${errorMsg}. Please try again.`);
     } finally {
       setIsExporting(false);
     }
