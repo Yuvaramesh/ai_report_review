@@ -183,11 +183,16 @@ ${
         throw new Error("PDF content not found");
       }
 
+      console.log("[v0] Starting PDF generation...");
       const canvas = await html2canvas(element, {
         scale: 2,
         backgroundColor: "#ffffff",
+        allowTaint: true,
+        useCORS: true,
       });
+      
       const imgData = canvas.toDataURL("image/png");
+      console.log("[v0] Canvas converted to image data");
 
       const pdf = new jsPDF({
         orientation: "portrait",
@@ -214,8 +219,11 @@ ${
         /\s+/g,
         "-"
       )}-${Date.now()}.pdf`;
+      
+      console.log("[v0] Saving PDF with filename:", filename);
       pdf.save(filename);
 
+      console.log("[v0] PDF export completed successfully");
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3000);
 
@@ -240,7 +248,9 @@ ${
       await handleSaveToDatabase();
     } catch (err) {
       console.error("[v0] Export error:", err);
-      alert(err instanceof Error ? err.message : "Export failed");
+      const errorMsg = err instanceof Error ? err.message : "Export failed";
+      console.error("[v0] Export error details:", errorMsg);
+      alert(`Failed to export PDF: ${errorMsg}`);
     } finally {
       setIsExporting(false);
     }
@@ -324,6 +334,23 @@ ${
 
         {/* Main Content */}
         <div id="pdf-content" className="space-y-6">
+          {/* AI Executive Summary */}
+          {results?.summary?.executiveSummary && (
+            <div className="rounded-xl border-2 border-primary/30 bg-primary/5 dark:bg-primary/10 p-6">
+              <div className="flex items-start gap-4">
+                <div className="text-2xl">🤖</div>
+                <div className="flex-1">
+                  <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-3">
+                    AI Executive Summary
+                  </h2>
+                  <p className="text-neutral-700 dark:text-neutral-300 leading-relaxed whitespace-pre-wrap">
+                    {results.summary.executiveSummary}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Summary Card */}
           <div
             className={`rounded-xl border-2 p-6 ${
@@ -340,7 +367,7 @@ ${
               )}
               <div className="flex-1">
                 <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">
-                  Summary
+                  Review Status
                 </h2>
                 <p className="text-neutral-700 dark:text-neutral-300">
                   {results?.message || "Review completed"}
