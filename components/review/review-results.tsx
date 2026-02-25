@@ -51,13 +51,13 @@ export default function ReviewResults({
   const [copiedSummary, setCopiedSummary] = useState(false);
   const [savingToDb, setSavingToDb] = useState(false);
 
-  const errors = Array.isArray(results?.errors) ? results!.errors : [];
-  const warnings = Array.isArray(results?.queries)
-    ? results!.queries
-    : Array.isArray(results?.warnings)
-      ? results!.warnings
-      : [];
-  const queries = Array.isArray(results?.queries) ? results!.queries : [];
+  const errors = results && Array.isArray(results.errors) ? results.errors : [];
+  const queries =
+    results && Array.isArray(results.queries) ? results.queries : [];
+  const warnings =
+    results && Array.isArray(results.warnings) ? results.warnings : [];
+  const presentation =
+    results && Array.isArray(results.presentation) ? results.presentation : [];
 
   const isReadyForPartner = errors.length === 0;
   const partnerName =
@@ -88,7 +88,7 @@ Status: ${isReadyForPartner ? "✓ Ready for Partner" : "⚠ Review Required"}
 Findings:
 - Errors (Critical): ${errors.length}
 - Queries/Recommendations: ${queries.length}
-- Presentation Suggestions: ${results?.presentation?.length || 0}
+- Presentation Suggestions: ${presentation.length}
 
 Files Reviewed:
 - Trial Balance: ${results?.uploadedFileNames?.trialBalance || "N/A"}
@@ -196,14 +196,14 @@ ${
         errors: errors || [],
         queries: queries || [],
         warnings: warnings || [],
-        presentation: results?.presentation || [],
+        presentation: presentation || [],
         parsed: results?.parsed || {},
         summary: results?.summary || {},
         timestamp: timestamp,
         totalFindings:
           (errors?.length || 0) +
           (queries?.length || 0) +
-          (results?.presentation?.length || 0),
+          (presentation?.length || 0),
         uploadedFileNames: results?.uploadedFileNames || {},
       };
 
@@ -593,14 +593,13 @@ ${
                   </div>
                 )}
 
-                {results?.presentation?.length > 0 && (
+                {presentation.length > 0 && (
                   <div className="rounded-xl border-2 border-info/30 bg-info/5 dark:bg-info/10 p-6">
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <div className="flex items-center gap-2">
                         <FileText className="h-5 w-5 text-info" />
                         <h3 className="font-bold text-info">
-                          Presentation Suggestions (
-                          {results.presentation.length})
+                          Presentation Suggestions ({presentation.length})
                         </h3>
                       </div>
                     </div>
@@ -609,7 +608,7 @@ ${
                       presentation
                     </p>
                     <div className="space-y-4">
-                      {results.presentation.map((p, idx) => (
+                      {presentation.map((p, idx) => (
                         <div
                           key={idx}
                           className="rounded-lg border border-info/20 bg-white dark:bg-neutral-900 p-4"

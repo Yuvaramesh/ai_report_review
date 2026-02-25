@@ -39,8 +39,12 @@ export class PDFGenerator {
     const statusText = isReady
       ? "READY FOR PARTNER REVIEW"
       : "REQUIRES CORRECTIONS";
-    const statusColor = isReady ? [220, 252, 231] : [254, 226, 226]; // Green or Red background
-    const statusTextColor = isReady ? [22, 101, 52] : [153, 27, 27]; // Green or Red text
+    const statusColor: [number, number, number] = isReady
+      ? [220, 252, 231]
+      : [254, 226, 226]; // Green or Red background
+    const statusTextColor: [number, number, number] = isReady
+      ? [22, 101, 52]
+      : [153, 27, 27]; // Green or Red text
 
     // Draw status box
     doc.setFillColor(...statusColor);
@@ -58,7 +62,13 @@ export class PDFGenerator {
 
     const cardWidth = (contentWidth - 4) / 3;
     const cardHeight = 18;
-    const cards = [
+    const cards: Array<{
+      label: string;
+      value: number;
+      bgColor: [number, number, number];
+      borderColor: [number, number, number];
+      textColor: [number, number, number];
+    }> = [
       {
         label: "Errors",
         value: results.errors?.length || 0,
@@ -147,7 +157,7 @@ export class PDFGenerator {
         contentWidth,
         pageWidth,
         pageHeight,
-        [153, 27, 27],
+        [153, 27, 27] as [number, number, number],
       );
     }
 
@@ -163,7 +173,7 @@ export class PDFGenerator {
         contentWidth,
         pageWidth,
         pageHeight,
-        [146, 64, 14],
+        [146, 64, 14] as [number, number, number],
       );
     }
 
@@ -179,7 +189,7 @@ export class PDFGenerator {
         contentWidth,
         pageWidth,
         pageHeight,
-        [22, 101, 52],
+        [22, 101, 52] as [number, number, number],
       );
     }
 
