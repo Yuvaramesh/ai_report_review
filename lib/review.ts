@@ -100,13 +100,9 @@ export async function applyPartnerRules(
       total: extractTotal(tbText),
     };
 
-    console.log("[v0] Review data prepared:", { accountsData, trialBalance });
-
     // Run the review engine with detailed rulesets
     const engine = new ReviewEngine(pId);
     const result = await engine.runReview(accountsData, trialBalance, scope);
-
-    console.log("[v0] Review results:", result);
 
     return {
       errors: result.errors || [],

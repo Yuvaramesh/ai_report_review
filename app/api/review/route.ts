@@ -144,13 +144,6 @@ export async function POST(req: Request) {
       parsed
     );
 
-    console.log("[v0] Rule results in API:", {
-      errors: ruleResults.errors?.length,
-      queries: ruleResults.queries?.length,
-      warnings: ruleResults.warnings?.length,
-      presentation: ruleResults.presentation?.length,
-    });
-
     const response = {
       partnerId,
       scope,
