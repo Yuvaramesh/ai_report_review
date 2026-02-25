@@ -1,0 +1,137 @@
+{
+  "info": {
+    "name": "AI Accounts Review API",
+    "description": "Complete API testing collection for AI Accounts Review system",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Process Files & Generate Review",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "accountsFile",
+              "type": "file",
+              "src": []
+            },
+            {
+              "key": "trialBalanceFile",
+              "type": "file",
+              "src": []
+            },
+            {
+              "key": "partnerId",
+              "type": "text",
+              "value": "1"
+            },
+            {
+              "key": "scope",
+              "type": "text",
+              "value": "full"
+            }
+          ]
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/review",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "review"]
+        },
+        "description": "Upload accounting files and generate comprehensive review with findings.\n\nRequired:\n- accountsFile (PDF/XLSX/TXT)\n- trialBalanceFile (XLSX)\n- partnerId (1-7)\n\nOptional:\n- scope (full, tax, commercial)"
+      },
+      "response": []
+    },
+    {
+      "name": "2. Save Review to Database",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reviewId\": \"AJREV210226082651\",\n  \"partnerId\": \"1\",\n  \"partnerName\": \"Partner 1\",\n  \"timestamp\": \"2024-02-25T08:26:51Z\",\n  \"scope\": \"full\",\n  \"status\": \"ready\",\n  \"errorCount\": 1,\n  \"warningCount\": 1,\n  \"queryCount\": 0,\n  \"presentationCount\": 1,\n  \"files\": {\n    \"trialBalance\": \"trial-balance.xlsx\",\n    \"currentYearAccounts\": \"accounts-2024.pdf\"\n  },\n  \"summary\": {\n    \"totalFindings\": 3,\n    \"isReadyForPartner\": true,\n    \"criticalIssues\": 1\n  },\n  \"errors\": [\n    {\n      \"id\": \"E1\",\n      \"issue\": \"Accounts not marked DRAFT\",\n      \"location\": \"Document header\",\n      \"action\": \"Mark accounts as DRAFT\"\n    }\n  ],\n  \"queries\": [\n    {\n      \"id\": \"Q1\",\n      \"query\": \"Company name verification\",\n      \"location\": \"Header section\",\n      \"evidence\": \"Missing company details\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/save-review",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "save-review"]
+        },
+        "description": "Save completed review to MongoDB database.\n\nRequired fields:\n- reviewId\n- partnerId\n\nOptional but recommended:\n- partnerName\n- timestamp\n- scope\n- status\n- errorCount\n- warningCount\n- errors array\n- queries array"
+      },
+      "response": []
+    },
+    {
+      "name": "3. Generate PDF HTML (Legacy)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"results\": {\n    \"partner\": {\n      \"id\": \"1\",\n      \"name\": \"Partner 1\",\n      \"title\": \"Maximum\"\n    },\n    \"errors\": [\n      {\n        \"id\": \"E1\",\n        \"issue\": \"Accounts not marked DRAFT\",\n        \"location\": \"Document header\",\n        \"action\": \"Mark as DRAFT\"\n      }\n    ],\n    \"queries\": [\n      {\n        \"id\": \"Q1\",\n        \"query\": \"Company name verification\",\n        \"location\": \"Header\",\n        \"evidence\": \"Missing details\"\n      }\n    ],\n    \"presentation\": [\n      {\n        \"id\": \"P1\",\n        \"item\": \"Formatting\",\n        \"location\": \"P&L\",\n        \"suggestion\": \"Improve consistency\"\n      }\n    ],\n    \"parsed\": {\n      \"documents\": []\n    }\n  }\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/export/pdf",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "export", "pdf"]
+        },
+        "description": "Generate HTML for PDF export (Legacy endpoint).\n\nRequired:\n- results object with partner and findings data"
+      },
+      "response": []
+    },
+    {
+      "name": "4. Generate HTML Report (Legacy)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"results\": {\n    \"partnerId\": \"1\",\n    \"errors\": [\n      {\n        \"message\": \"Accounts not marked DRAFT\"\n      }\n    ],\n    \"warnings\": [\n      {\n        \"message\": \"Company name not found in accounts\"\n      }\n    ],\n    \"queries\": [],\n    \"presentation\": []\n  }\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/export-review-pdf",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "export-review-pdf"]
+        },
+        "description": "Generate browser-printable HTML report for PDF export (Legacy).\n\nReturns HTML content with Content-Type: text/html"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "partner_id",
+      "value": "1",
+      "type": "string"
+    }
+  ]
+}
