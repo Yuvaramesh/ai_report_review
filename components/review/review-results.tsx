@@ -460,52 +460,169 @@ ${
                 </div>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-6">
                 {errors.length > 0 && (
                   <div className="rounded-xl border-2 border-error/30 bg-error/5 dark:bg-error/10 p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <AlertCircle className="h-5 w-5 text-error" />
-                      <h3 className="font-bold text-error">
-                        Errors ({errors.length})
-                      </h3>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-5 w-5 text-error" />
+                        <h3 className="font-bold text-error">
+                          Errors ({errors.length})
+                        </h3>
+                      </div>
                     </div>
-                    <ul className="space-y-2">
+                    <p className="text-xs text-error/70 mb-4">
+                      Critical issues that must be corrected before partner review
+                    </p>
+                    <div className="space-y-4">
                       {errors.map((err, idx) => (
-                        <li
+                        <div
                           key={idx}
-                          className="text-sm text-neutral-700 dark:text-neutral-300 flex gap-2"
+                          className="rounded-lg border border-error/20 bg-white dark:bg-neutral-900 p-4"
                         >
-                          <span className="text-error">•</span>
-                          {typeof err === "string"
-                            ? err
-                            : err?.message || JSON.stringify(err)}
-                        </li>
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="font-mono text-xs font-bold text-error">
+                              {err.id || `E${idx + 1}`}
+                            </div>
+                            {err.severity && (
+                              <span className="text-xs font-semibold px-2 py-1 rounded bg-error/20 text-error">
+                                {err.severity.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mb-3">
+                            <p className="text-sm font-semibold text-neutral-900 dark:text-white">
+                              {err.issue || err.message || JSON.stringify(err)}
+                            </p>
+                            {err.location && (
+                              <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+                                <span className="font-semibold">Location:</span> {err.location}
+                              </p>
+                            )}
+                            {err.tbRef && (
+                              <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                                <span className="font-semibold">Reference:</span> {err.tbRef}
+                              </p>
+                            )}
+                          </div>
+                          {err.action && (
+                            <div className="bg-error/10 rounded p-3 border-l-2 border-error">
+                              <p className="text-xs font-semibold text-error mb-1">
+                                Action Required:
+                              </p>
+                              <p className="text-xs text-neutral-700 dark:text-neutral-300">
+                                {err.action}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 )}
 
                 {warnings.length > 0 && (
                   <div className="rounded-xl border-2 border-warning/30 bg-warning/5 dark:bg-warning/10 p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <AlertTriangle className="h-5 w-5 text-warning" />
-                      <h3 className="font-bold text-warning">
-                        Warnings ({warnings.length})
-                      </h3>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-warning" />
+                        <h3 className="font-bold text-warning">
+                          Queries / Recommendations ({warnings.length})
+                        </h3>
+                      </div>
                     </div>
-                    <ul className="space-y-2">
+                    <p className="text-xs text-warning/70 mb-4">
+                      Questions and recommendations for partner decision or clarification
+                    </p>
+                    <div className="space-y-4">
                       {warnings.map((w, idx) => (
-                        <li
+                        <div
                           key={idx}
-                          className="text-sm text-neutral-700 dark:text-neutral-300 flex gap-2"
+                          className="rounded-lg border border-warning/20 bg-white dark:bg-neutral-900 p-4"
                         >
-                          <span className="text-warning">•</span>
-                          {typeof w === "string"
-                            ? w
-                            : w?.message || JSON.stringify(w)}
-                        </li>
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="font-mono text-xs font-bold text-warning">
+                              {w.id || `Q${idx + 1}`}
+                            </div>
+                            {w.severity && (
+                              <span className="text-xs font-semibold px-2 py-1 rounded bg-warning/20 text-warning">
+                                {w.severity.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mb-3">
+                            <p className="text-sm font-semibold text-neutral-900 dark:text-white">
+                              {w.query || w.message || JSON.stringify(w)}
+                            </p>
+                            {w.location && (
+                              <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+                                <span className="font-semibold">Location:</span> {w.location}
+                              </p>
+                            )}
+                          </div>
+                          {w.evidence && (
+                            <div className="bg-warning/10 rounded p-3 border-l-2 border-warning">
+                              <p className="text-xs font-semibold text-warning mb-1">
+                                Evidence:
+                              </p>
+                              <p className="text-xs text-neutral-700 dark:text-neutral-300">
+                                {w.evidence}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       ))}
-                    </ul>
+                    </div>
+                  </div>
+                )}
+
+                {results?.presentation?.length > 0 && (
+                  <div className="rounded-xl border-2 border-info/30 bg-info/5 dark:bg-info/10 p-6">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-info" />
+                        <h3 className="font-bold text-info">
+                          Presentation Suggestions ({results.presentation.length})
+                        </h3>
+                      </div>
+                    </div>
+                    <p className="text-xs text-info/70 mb-4">
+                      Optional improvements for formatting, consistency, and presentation
+                    </p>
+                    <div className="space-y-4">
+                      {results.presentation.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-lg border border-info/20 bg-white dark:bg-neutral-900 p-4"
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="font-mono text-xs font-bold text-info">
+                              {p.id || `P${idx + 1}`}
+                            </div>
+                          </div>
+                          <div className="mb-3">
+                            <p className="text-sm font-semibold text-neutral-900 dark:text-white">
+                              {p.item}
+                            </p>
+                            {p.location && (
+                              <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+                                <span className="font-semibold">Location:</span> {p.location}
+                              </p>
+                            )}
+                          </div>
+                          {p.suggestion && (
+                            <div className="bg-info/10 rounded p-3 border-l-2 border-info">
+                              <p className="text-xs font-semibold text-info mb-1">
+                                Suggestion:
+                              </p>
+                              <p className="text-xs text-neutral-700 dark:text-neutral-300">
+                                {p.suggestion}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

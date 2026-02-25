@@ -338,67 +338,156 @@ export class PDFGenerator {
 
     y += 10;
 
-    // Table header
-    const colWidth = (width - 4) / columns.length;
-    doc.setFillColor(243, 244, 246);
-    doc.setDrawColor(209, 213, 219);
-    doc.setFontSize(9);
-    doc.setTextColor(55, 65, 81);
-    doc.setFont("helvetica", "bold");
-
-    columns.forEach((col, idx) => {
-      doc.text(
-        col,
-        x + 2 + idx * colWidth,
-        y,
-        { maxWidth: colWidth - 2 }
-      );
-    });
-
-    y += 6;
-    doc.setLineWidth(0.3);
-    doc.line(x, y - 1, x + width, y - 1);
-
-    // Table rows
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(70, 70, 70);
-
-    findings.forEach((finding) => {
-      if (y + 5 > pageHeight - margin) {
+    // Detailed findings format instead of table
+    findings.forEach((finding, fidx) => {
+      if (y + 10 > pageHeight - margin) {
         doc.addPage();
         y = margin;
       }
 
-      // Get values for columns
-      const values = columns.map((col) => {
-        if (col === "ID") return finding.id || "";
-        if (col === "Issue") return finding.issue || finding.item || "";
-        if (col === "Query") return finding.query || "";
-        if (col === "Suggestion") return finding.suggestion || "";
-        if (col === "Location") return finding.location || "";
-        if (col === "Action") return finding.action || "";
-        return "";
+      // Finding ID and header
+      doc.setFontSize(9);
+      doc.setTextColor(titleColor[0], titleColor[1], titleColor[2]);
+      doc.setFont("helvetica", "bold");
+      const idText = finding.id || `${title.charAt(0)}${fidx + 1}`;
+      doc.text(`[${idText}]`, x + 2, y);
+      y += 4;
+
+      // Main content (Issue/Query/Item)
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(17, 24, 39);
+      
+      const contentText = finding.issue || finding.query || finding.item || "";
+      const contentLines = doc.splitTextToSize(contentText, width - 8);
+      contentLines.forEach((line: string) => {
+        if (y + 3 > pageHeight - margin) {
+          doc.addPage();
+          y = margin;
+        }
+        doc.text(line, x + 4, y);
+        y += 3;
       });
 
-      // Draw row
-      values.forEach((value, idx) => {
-        const text = String(value).substring(0, 30);
-        doc.text(
-          text,
-          x + 2 + idx * colWidth,
-          y,
-          { maxWidth: colWidth - 2 }
+      y += 1;
+
+      // Location
+      if (finding.location) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        const locationLines = doc.splitTextToSize(
+          `Location: ${finding.location}`,
+          width - 8
         );
-      });
+        locationLines.forEach((line: string) => {
+          if (y + 2.5 > pageHeight - margin) {
+            doc.addPage();
+            y = margin;
+          }
+          doc.text(line, x + 4, y);
+          y += 2.5;
+        });
+      }
 
-      y += 5;
-      doc.setLineWidth(0.1);
-      doc.setDrawColor(229, 231, 235);
-      doc.line(x, y - 1, x + width, y - 1);
+      // Reference (for errors)
+      if (finding.tbRef) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Reference: ${finding.tbRef}`, x + 4, y);
+        y += 2.5;
+      }
+
+      y += 1;
+
+      // Action (for errors)
+      if (finding.action) {
+        if (y + 4 > pageHeight - margin) {
+          doc.addPage();
+          y = margin;
+        }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(titleColor[0], titleColor[1], titleColor[2]);
+        doc.text("Action Required:", x + 4, y);
+        y += 3;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 50);
+        const actionLines = doc.splitTextToSize(finding.action, width - 12);
+        actionLines.forEach((line: string) => {
+          if (y + 2.5 > pageHeight - margin) {
+            doc.addPage();
+            y = margin;
+          }
+          doc.text(line, x + 6, y);
+          y += 2.5;
+        });
+      } 
+      // Evidence (for queries)
+      else if (finding.evidence) {
+        if (y + 4 > pageHeight - margin) {
+          doc.addPage();
+          y = margin;
+        }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(titleColor[0], titleColor[1], titleColor[2]);
+        doc.text("Evidence:", x + 4, y);
+        y += 3;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 50);
+        const evidenceLines = doc.splitTextToSize(finding.evidence, width - 12);
+        evidenceLines.forEach((line: string) => {
+          if (y + 2.5 > pageHeight - margin) {
+            doc.addPage();
+            y = margin;
+          }
+          doc.text(line, x + 6, y);
+          y += 2.5;
+        });
+      } 
+      // Suggestion (for presentation)
+      else if (finding.suggestion) {
+        if (y + 4 > pageHeight - margin) {
+          doc.addPage();
+          y = margin;
+        }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(titleColor[0], titleColor[1], titleColor[2]);
+        doc.text("Suggestion:", x + 4, y);
+        y += 3;
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(50, 50, 50);
+        const suggestionLines = doc.splitTextToSize(finding.suggestion, width - 12);
+        suggestionLines.forEach((line: string) => {
+          if (y + 2.5 > pageHeight - margin) {
+            doc.addPage();
+            y = margin;
+          }
+          doc.text(line, x + 6, y);
+          y += 2.5;
+        });
+      }
+
+      // Add separator
+      y += 3;
+      if (y + 1 <= pageHeight - margin) {
+        doc.setLineWidth(0.1);
+        doc.setDrawColor(200, 200, 200);
+        doc.line(x + 2, y, x + width - 2, y);
+        y += 3;
+      }
     });
 
-    return y + 4;
+    return y;
   }
 
   // Backward compatibility method
