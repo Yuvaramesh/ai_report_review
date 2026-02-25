@@ -138,8 +138,8 @@ export async function POST(req: Request) {
     ]);
 
     const partnerId = partnerIdRaw != null ? String(partnerIdRaw) : null;
-    const ruleResults = applyPartnerRules(
-      String(partnerId ?? "unknown"),
+    const ruleResults = await applyPartnerRules(
+      String(partnerId ?? "1"),
       scope,
       parsed
     );
@@ -150,7 +150,9 @@ export async function POST(req: Request) {
       parsed,
       rules: ruleResults,
       errors: ruleResults.errors ?? [],
+      queries: ruleResults.queries ?? [],
       warnings: ruleResults.warnings ?? [],
+      presentation: ruleResults.presentation ?? [],
       message: "Files received, parsed, and rules applied successfully.",
     };
 

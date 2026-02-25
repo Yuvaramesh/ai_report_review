@@ -52,7 +52,8 @@ export default function ReviewResults({
   const [savingToDb, setSavingToDb] = useState(false);
 
   const errors = Array.isArray(results?.errors) ? results!.errors : [];
-  const warnings = Array.isArray(results?.warnings) ? results!.warnings : [];
+  const warnings = Array.isArray(results?.queries) ? results!.queries : Array.isArray(results?.warnings) ? results!.warnings : [];
+  const queries = Array.isArray(results?.queries) ? results!.queries : [];
 
   const isReadyForPartner = errors.length === 0;
   const partnerName =
