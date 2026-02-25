@@ -1,424 +1,404 @@
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
 
 export class PDFGenerator {
-  generateHTML(results: any): string {
-    const timestamp = new Date().toLocaleDateString();
-    const time = new Date().toLocaleTimeString();
+  generatePDF(results: any, filename = "review-report.pdf"): Blob {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
 
-    const errorRows = results.errors
-      .map(
-        (error: any) => `
-      <tr>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb; color: #991b1b;">${
-          error.id || ""
-        }</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${
-          error.issue || error.title || ""
-        }</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${
-          error.location || ""
-        }</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${
-          error.action || ""
-        }</td>
-      </tr>
-    `
-      )
-      .join("");
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 15;
+    const contentWidth = pageWidth - 2 * margin;
+    let yPosition = margin;
 
-    const queryRows = results.queries
-      .map(
-        (query: any) => `
-      <tr>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${
-          query.id || ""
-        }</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${
-          query.query || query.title || ""
-        }</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${
-          query.location || ""
-        }</td>
-      </tr>
-    `
-      )
-      .join("");
+    // Set default font
+    doc.setFont("helvetica", "normal");
 
-    const presentationRows = results.presentation
-      .map(
-        (item: any) => `
-      <tr>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${
-          item.suggestion || item.title || ""
-        }</td>
-        <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${
-          item.location || ""
-        }</td>
-      </tr>
-    `
-      )
-      .join("");
+    // ===== HEADER =====
+    doc.setFontSize(24);
+    doc.setTextColor(30, 64, 175); // Blue
+    doc.text("AI Accounts Review Report", margin, yPosition);
+    yPosition += 12;
 
-    return `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>AI Accounts Review Report</title>
-        <style>
-          * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-          }
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            line-height: 1.6;
-            color: #111827;
-            background: white;
-          }
-          .page {
-            max-width: 8.5in;
-            height: 11in;
-            margin: 0 auto;
-            padding: 40px;
-            background: white;
-          }
-          .header {
-            border-bottom: 2px solid #1e40af;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-          }
-          .header h1 {
-            color: #1e40af;
-            font-size: 28px;
-            margin-bottom: 5px;
-          }
-          .header p {
-            color: #4b5563;
-            font-size: 14px;
-          }
-          .summary-cards {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 15px;
-            margin: 30px 0;
-          }
-          .summary-card {
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 15px;
-            text-align: center;
-          }
-          .summary-card.errors {
-            border-color: #fee2e2;
-            background: #fef2f2;
-          }
-          .summary-card.queries {
-            border-color: #fef3c7;
-            background: #fffbeb;
-          }
-          .summary-card.presentation {
-            border-color: #dcfce7;
-            background: #f0fdf4;
-          }
-          .summary-card .number {
-            font-size: 32px;
-            font-weight: bold;
-            margin: 10px 0;
-          }
-          .summary-card.errors .number {
-            color: #991b1b;
-          }
-          .summary-card.queries .number {
-            color: #92400e;
-          }
-          .summary-card.presentation .number {
-            color: #166534;
-          }
-          .summary-card .label {
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            color: #666;
-          }
-          .section {
-            margin: 30px 0;
-            page-break-inside: avoid;
-          }
-          .section-title {
-            background: linear-gradient(to right, #1e40af, #3b82f6);
-            color: white;
-            padding: 12px 15px;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 15px;
-          }
-          .section-title.errors {
-            background: linear-gradient(to right, #dc2626, #f87171);
-          }
-          .section-title.queries {
-            background: linear-gradient(to right, #d97706, #fbbf24);
-          }
-          .section-title.presentation {
-            background: linear-gradient(to right, #16a34a, #86efac);
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 15px;
-            font-size: 12px;
-          }
-          table th {
-            background: #f3f4f6;
-            padding: 10px;
-            text-align: left;
-            font-weight: 600;
-            border-bottom: 2px solid #d1d5db;
-          }
-          table td {
-            padding: 10px;
-            border-bottom: 1px solid #e5e7eb;
-          }
-          .declaration {
-            border: 2px solid #d1d5db;
-            border-radius: 6px;
-            padding: 15px;
-            margin-top: 20px;
-            background: #f9fafb;
-            font-size: 12px;
-          }
-          .declaration h3 {
-            margin-bottom: 10px;
-            color: #111827;
-          }
-          .declaration ul {
-            list-style: none;
-            margin-left: 0;
-          }
-          .declaration li {
-            margin: 8px 0;
-            padding-left: 20px;
-            position: relative;
-          }
-          .declaration li:before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: #16a34a;
-            font-weight: bold;
-          }
-          .footer {
-            margin-top: 40px;
-            padding-top: 15px;
-            border-top: 1px solid #e5e7eb;
-            font-size: 11px;
-            color: #6b7280;
-            text-align: center;
-          }
-          .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-            margin-bottom: 15px;
-          }
-          .status-badge.ready {
-            background: #dcfce7;
-            color: #166534;
-          }
-          .status-badge.not-ready {
-            background: #fee2e2;
-            color: #991b1b;
-          }
-          @media print {
-            body {
-              margin: 0;
-              padding: 0;
-            }
-            .page {
-              max-width: 100%;
-              height: auto;
-              margin: 0;
-              padding: 0.5in;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="page">
-          <div class="header">
-            <h1>AI Accounts Review Report</h1>
-            <p>Partner: <strong>${results.partner.name}</strong> – ${
-      results.partner.title
-    }</p>
-            <p>Generated: ${timestamp} at ${time}</p>
-          </div>
+    doc.setFontSize(10);
+    doc.setTextColor(75, 85, 99); // Gray
+    doc.text(
+      `Partner: ${results.partner?.name || "N/A"} – ${results.partner?.title || "N/A"}`,
+      margin,
+      yPosition,
+    );
+    yPosition += 6;
+    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, yPosition);
+    yPosition += 10;
 
-          <div class="status-badge ${
-            results.errors.length === 0 ? "ready" : "not-ready"
-          }">
-            ${
-              results.errors.length === 0
-                ? "READY FOR PARTNER REVIEW"
-                : "REQUIRES CORRECTIONS"
-            }
-          </div>
+    // ===== STATUS BADGE =====
+    const isReady = results.errors?.length === 0;
+    const statusText = isReady
+      ? "READY FOR PARTNER REVIEW"
+      : "REQUIRES CORRECTIONS";
+    const statusColor = isReady ? [220, 252, 231] : [254, 226, 226]; // Green or Red background
+    const statusTextColor = isReady ? [22, 101, 52] : [153, 27, 27]; // Green or Red text
 
-          <div class="summary-cards">
-            <div class="summary-card errors">
-              <div class="label">Errors</div>
-              <div class="number">${results.errors.length}</div>
-              <div style="font-size: 11px; color: #666;">Must fix</div>
-            </div>
-            <div class="summary-card queries">
-              <div class="label">Queries</div>
-              <div class="number">${results.queries.length}</div>
-              <div style="font-size: 11px; color: #666;">Partner decision</div>
-            </div>
-            <div class="summary-card presentation">
-              <div class="label">Presentation</div>
-              <div class="number">${results.presentation.length}</div>
-              <div style="font-size: 11px; color: #666;">Suggestions</div>
-            </div>
-          </div>
+    // Draw status box
+    doc.setFillColor(...statusColor);
+    doc.setDrawColor(...statusTextColor);
+    doc.rect(margin, yPosition - 4, contentWidth, 8, "F");
+    doc.setFontSize(9);
+    doc.setTextColor(...statusTextColor);
+    doc.setFont("helvetica", "bold");
+    doc.text(statusText, margin + 5, yPosition + 1);
+    yPosition += 12;
 
-          ${
-            results.errors.length > 0
-              ? `
-            <div class="section">
-              <div class="section-title errors">Errors</div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Issue</th>
-                    <th>Location</th>
-                    <th>Action Required</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${errorRows}
-                </tbody>
-              </table>
-            </div>
-          `
-              : ""
-          }
+    // ===== SUMMARY CARDS =====
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
 
-          ${
-            results.queries.length > 0
-              ? `
-            <div class="section">
-              <div class="section-title queries">Queries</div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Query</th>
-                    <th>Location</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${queryRows}
-                </tbody>
-              </table>
-            </div>
-          `
-              : ""
-          }
+    const cardWidth = (contentWidth - 4) / 3;
+    const cardHeight = 18;
+    const cards = [
+      {
+        label: "Errors",
+        value: results.errors?.length || 0,
+        bgColor: [254, 242, 242],
+        borderColor: [220, 38, 38],
+        textColor: [153, 27, 27],
+      },
+      {
+        label: "Queries",
+        value: results.queries?.length || 0,
+        bgColor: [255, 251, 235],
+        borderColor: [217, 119, 6],
+        textColor: [146, 64, 14],
+      },
+      {
+        label: "Presentation",
+        value: results.presentation?.length || 0,
+        bgColor: [240, 253, 244],
+        borderColor: [22, 163, 74],
+        textColor: [22, 101, 52],
+      },
+    ];
 
-          ${
-            results.presentation.length > 0
-              ? `
-            <div class="section">
-              <div class="section-title presentation">Presentation Suggestions</div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Suggestion</th>
-                    <th>Location</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${presentationRows}
-                </tbody>
-              </table>
-            </div>
-          `
-              : ""
-          }
+    cards.forEach((card, idx) => {
+      const x = margin + idx * (cardWidth + 2);
+      doc.setFillColor(...card.bgColor);
+      doc.setDrawColor(...card.borderColor);
+      doc.rect(x, yPosition, cardWidth, cardHeight, "FD");
 
-          <div class="declaration">
-            <h3>Declaration</h3>
-            <ul>
-              <li>Does not amend figures or post journals</li>
-              <li>Highlights issues for correction prior to partner review</li>
-              <li>AI-generated review using ${results.partner.name} ruleset</li>
-            </ul>
-          </div>
+      doc.setFontSize(8);
+      doc.setTextColor(100, 100, 100);
+      doc.text(card.label, x + 2, yPosition + 5);
 
-          <div class="footer">
-            <p>This report was generated by AI Accounts Review System on ${timestamp}</p>
-            <p>Review Scope: ${results.config.scope} | Total Findings: ${
-      results.totalFindings
-    }</p>
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-  }
-
-  async generatePDF(
-    results: any,
-    filename = "review-report.pdf"
-  ): Promise<Blob> {
-    const html = this.generateHTML(results);
-
-    // Create a temporary container
-    const container = document.createElement("div");
-    container.innerHTML = html;
-    container.style.position = "absolute";
-    container.style.left = "-9999px";
-    document.body.appendChild(container);
-
-    try {
-      const canvas = await html2canvas(container, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
+      doc.setFontSize(14);
+      doc.setTextColor(...card.textColor);
+      doc.setFont("helvetica", "bold");
+      doc.text(card.value.toString(), x + cardWidth / 2, yPosition + 12, {
+        align: "center",
       });
+      doc.setFont("helvetica", "normal");
+    });
 
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
+    yPosition += cardHeight + 12;
 
-      const imgData = canvas.toDataURL("image/png");
-      const imgWidth = 210; // A4 width in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
+    // ===== AI SUMMARY =====
+    this.addSection(
+      doc,
+      "AI Executive Summary",
+      margin,
+      yPosition,
+      contentWidth,
+      pageWidth,
+      pageHeight,
+    );
+    yPosition += 8;
 
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= 297; // A4 height in mm
+    const summaryText = `This accounts review for ${results.partner?.name || "Partner"} identified ${results.errors?.length || 0} error(s) and ${results.queries?.length || 0} query/recommendation(s). ${
+      results.errors?.length === 0
+        ? "The file is ready for partner review."
+        : `${results.errors?.length} critical error(s) must be addressed before partner review. Additionally, ${results.queries?.length || 0} query/recommendation(s) have been flagged for attention.`
+    } Please review the detailed findings section for specific actions required.`;
 
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= 297;
+    const summaryLines = doc.splitTextToSize(summaryText, contentWidth - 4);
+    doc.setFontSize(9);
+    doc.setTextColor(50, 50, 50);
+    summaryLines.forEach((line: string) => {
+      if (yPosition + 5 > pageHeight - margin) {
+        doc.addPage();
+        yPosition = margin;
+      }
+      doc.text(line, margin + 2, yPosition);
+      yPosition += 4;
+    });
+
+    yPosition += 6;
+
+    // ===== ERRORS SECTION =====
+    if (results.errors?.length > 0) {
+      yPosition = this.addFindingsTable(
+        doc,
+        "Errors",
+        results.errors,
+        ["ID", "Issue", "Location", "Action"],
+        margin,
+        yPosition,
+        contentWidth,
+        pageWidth,
+        pageHeight,
+        [153, 27, 27],
+      );
+    }
+
+    // ===== QUERIES SECTION =====
+    if (results.queries?.length > 0) {
+      yPosition = this.addFindingsTable(
+        doc,
+        "Queries",
+        results.queries,
+        ["ID", "Query", "Location"],
+        margin,
+        yPosition,
+        contentWidth,
+        pageWidth,
+        pageHeight,
+        [146, 64, 14],
+      );
+    }
+
+    // ===== PRESENTATION SECTION =====
+    if (results.presentation?.length > 0) {
+      yPosition = this.addFindingsTable(
+        doc,
+        "Presentation Suggestions",
+        results.presentation,
+        ["Suggestion", "Location"],
+        margin,
+        yPosition,
+        contentWidth,
+        pageWidth,
+        pageHeight,
+        [22, 101, 52],
+      );
+    }
+
+    // ===== PARSED DATA SECTION =====
+    if (results.parsed) {
+      if (yPosition + 20 > pageHeight - margin) {
+        doc.addPage();
+        yPosition = margin;
       }
 
-      return pdf.output("blob");
-    } finally {
-      document.body.removeChild(container);
+      this.addSection(
+        doc,
+        "Parsed Data",
+        margin,
+        yPosition,
+        contentWidth,
+        pageWidth,
+        pageHeight,
+      );
+      yPosition += 8;
+
+      const parsedText = JSON.stringify(results.parsed, null, 2);
+      const parsedLines = doc.splitTextToSize(parsedText, contentWidth - 4);
+      doc.setFontSize(8);
+      doc.setTextColor(70, 70, 70);
+      doc.setFont("courier", "normal");
+
+      parsedLines.forEach((line: string, idx: number) => {
+        if (idx > 20) return; // Limit to prevent huge documents
+        if (yPosition + 3 > pageHeight - margin) {
+          doc.addPage();
+          yPosition = margin;
+        }
+        doc.text(line, margin + 2, yPosition);
+        yPosition += 3;
+      });
+
+      if (parsedLines.length > 20) {
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        if (yPosition + 3 > pageHeight - margin) {
+          doc.addPage();
+          yPosition = margin;
+        }
+        doc.text(
+          `... (${parsedLines.length - 20} more lines)`,
+          margin + 2,
+          yPosition,
+        );
+      }
+
+      yPosition += 6;
     }
+
+    // ===== DECLARATION =====
+    if (yPosition + 20 > pageHeight - margin) {
+      doc.addPage();
+      yPosition = margin;
+    }
+
+    doc.setFillColor(249, 250, 251);
+    doc.setDrawColor(209, 213, 219);
+    doc.rect(margin, yPosition - 2, contentWidth, 20, "FD");
+
+    doc.setFontSize(10);
+    doc.setTextColor(17, 24, 39);
+    doc.setFont("helvetica", "bold");
+    doc.text("Declaration", margin + 3, yPosition + 2);
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(50, 50, 50);
+    doc.text(
+      "✓ Does not amend figures or post journals",
+      margin + 5,
+      yPosition + 7,
+    );
+    doc.text(
+      "✓ Highlights issues for correction prior to partner review",
+      margin + 5,
+      yPosition + 11,
+    );
+    doc.text(
+      `✓ AI-generated review using ${results.partner?.name || "Partner"} ruleset`,
+      margin + 5,
+      yPosition + 15,
+    );
+
+    yPosition += 22;
+
+    // ===== FOOTER =====
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(
+        `Generated by AI Accounts Review System | Page ${i} of ${pageCount}`,
+        pageWidth / 2,
+        pageHeight - 8,
+        { align: "center" },
+      );
+    }
+
+    return doc.output("blob");
+  }
+
+  private addSection(
+    doc: jsPDF,
+    title: string,
+    x: number,
+    y: number,
+    width: number,
+    pageWidth: number,
+    pageHeight: number,
+  ): number {
+    const margin = 15;
+    if (y + 8 > pageHeight - margin) {
+      doc.addPage();
+      return margin;
+    }
+
+    doc.setFillColor(30, 64, 175);
+    doc.rect(x, y - 4, width, 8, "F");
+
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.text(title, x + 3, y + 1);
+    doc.setFont("helvetica", "normal");
+
+    return y;
+  }
+
+  private addFindingsTable(
+    doc: jsPDF,
+    title: string,
+    findings: any[],
+    columns: string[],
+    x: number,
+    y: number,
+    width: number,
+    pageWidth: number,
+    pageHeight: number,
+    titleColor: [number, number, number],
+  ): number {
+    const margin = 15;
+    if (y + 15 > pageHeight - margin) {
+      doc.addPage();
+      y = margin;
+    }
+
+    // Section title
+    doc.setFillColor(...titleColor);
+    doc.rect(x, y - 4, width, 8, "F");
+
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.text(title, x + 3, y + 1);
+    doc.setFont("helvetica", "normal");
+
+    y += 10;
+
+    // Table header
+    const colWidth = (width - 4) / columns.length;
+    doc.setFillColor(243, 244, 246);
+    doc.setDrawColor(209, 213, 219);
+    doc.setFontSize(9);
+    doc.setTextColor(55, 65, 81);
+    doc.setFont("helvetica", "bold");
+
+    columns.forEach((col, idx) => {
+      doc.text(col, x + 2 + idx * colWidth, y, { maxWidth: colWidth - 2 });
+    });
+
+    y += 6;
+    doc.setLineWidth(0.3);
+    doc.line(x, y - 1, x + width, y - 1);
+
+    // Table rows
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(70, 70, 70);
+
+    findings.forEach((finding) => {
+      if (y + 5 > pageHeight - margin) {
+        doc.addPage();
+        y = margin;
+      }
+
+      // Get values for columns
+      const values = columns.map((col) => {
+        if (col === "ID") return finding.id || "";
+        if (col === "Issue") return finding.issue || finding.item || "";
+        if (col === "Query") return finding.query || "";
+        if (col === "Suggestion") return finding.suggestion || "";
+        if (col === "Location") return finding.location || "";
+        if (col === "Action") return finding.action || "";
+        return "";
+      });
+
+      // Draw row
+      values.forEach((value, idx) => {
+        const text = String(value).substring(0, 30);
+        doc.text(text, x + 2 + idx * colWidth, y, { maxWidth: colWidth - 2 });
+      });
+
+      y += 5;
+      doc.setLineWidth(0.1);
+      doc.setDrawColor(229, 231, 235);
+      doc.line(x, y - 1, x + width, y - 1);
+    });
+
+    return y + 4;
+  }
+
+  // Backward compatibility method
+  generateHTML(results: any): string {
+    return "<html><body>Use generatePDF method instead</body></html>";
   }
 }

@@ -46,7 +46,7 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
   // helper: try recover a File from several shapes (File, data URL, JSON envelope, base64)
   async function recoverFile(
     value: any,
-    fallbackName: string
+    fallbackName: string,
   ): Promise<File | null> {
     if (!value) return null;
     // Already a File from input.files[0]
@@ -112,30 +112,30 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
       console.log("DEBUG uploadedFiles (browser):", uploadedFiles);
       console.log(
         "trialBalance instanceof File:",
-        uploadedFiles.trialBalance instanceof File
+        uploadedFiles.trialBalance instanceof File,
       );
       console.log(
         "currentYearAccounts instanceof File:",
-        uploadedFiles.currentYearAccounts instanceof File
+        uploadedFiles.currentYearAccounts instanceof File,
       );
       console.log("trialBalance value:", uploadedFiles.trialBalance);
       console.log(
         "currentYearAccounts value:",
-        uploadedFiles.currentYearAccounts
+        uploadedFiles.currentYearAccounts,
       );
 
       const acFile = await recoverFile(
         uploadedFiles.currentYearAccounts,
-        "accounts.pdf"
+        "accounts.pdf",
       );
       const tbFile = await recoverFile(
         uploadedFiles.trialBalance,
-        "trial-balance.pdf"
+        "trial-balance.pdf",
       );
 
       if (!acFile || !tbFile) {
         throw new Error(
-          "Trial balance and accounts files must be provided as actual File objects. Ensure your uploader stores input.files[0] in state."
+          "Trial balance and accounts files must be provided as actual File objects. Ensure your uploader stores input.files[0] in state.",
         );
       }
 
@@ -148,7 +148,7 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
       formData.append("trialBalanceFile", tbFile);
       formData.append(
         "partnerId",
-        String(selectedPartner.id ?? selectedPartner)
+        String(selectedPartner.id ?? selectedPartner),
       );
       formData.append("scope", config?.scope ?? "");
 
@@ -193,7 +193,7 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to run review. Please try again."
+          : "Failed to run review. Please try again.",
       );
     } finally {
       setIsLoading(false);
@@ -228,16 +228,80 @@ export default function ReviewFlow({ uploadedFiles }: ReviewFlowProps) {
 
   if (isLoading) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="inline-flex">
-            <Loader className="h-12 w-12 animate-spin text-blue-600" />
+      <main className="min-h-screen flex items-center justify-center p-6">
+        <div className="max-w-2xl w-full space-y-8">
+          <div className="text-center space-y-3">
+            <h2 className="text-3xl font-bold text-neutral-900 dark:text-white">
+              Running AI Review
+            </h2>
+            <p className="text-neutral-600 dark:text-neutral-400">
+              Your accounts are being analyzed with AI. This may take 30-60
+              seconds.
+            </p>
           </div>
-          <h2 className="text-2xl font-bold">Running AI Review</h2>
-          <p className="text-neutral-600">
-            Parsing documents and running validations... This may take 30-60
-            seconds.
-          </p>
+
+          {/* Progress Steps */}
+          <div className="space-y-4">
+            {[
+              {
+                step: 1,
+                title: "Extracting Documents",
+                description:
+                  "AI is parsing your PDF/Excel files to extract structured financial data",
+                icon: "📄",
+              },
+              {
+                step: 2,
+                title: "Validating Against Rules",
+                description:
+                  "Applying partner-specific rules and AI-powered compliance checks",
+                icon: "✓",
+              },
+              {
+                step: 3,
+                title: "Generating Summary",
+                description:
+                  "Creating AI executive summary and actionable insights",
+                icon: "📊",
+              },
+            ].map((item) => (
+              <div
+                key={item.step}
+                className="flex items-start gap-4 p-4 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900"
+              >
+                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary/20 text-primary font-bold flex-shrink-0">
+                  <div className="text-lg">{item.icon}</div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-neutral-900 dark:text-white mb-1">
+                    {item.step}. {item.title}
+                  </h3>
+                  <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                    {item.description}
+                  </p>
+                </div>
+                <Loader className="h-5 w-5 animate-spin text-primary flex-shrink-0" />
+              </div>
+            ))}
+          </div>
+
+          {/* Loading Animation */}
+          <div className="flex justify-center">
+            <div className="inline-flex items-center gap-1">
+              <div
+                className="h-2 w-2 rounded-full bg-primary animate-bounce"
+                style={{ animationDelay: "0ms" }}
+              />
+              <div
+                className="h-2 w-2 rounded-full bg-primary animate-bounce"
+                style={{ animationDelay: "150ms" }}
+              />
+              <div
+                className="h-2 w-2 rounded-full bg-primary animate-bounce"
+                style={{ animationDelay: "300ms" }}
+              />
+            </div>
+          </div>
         </div>
       </main>
     );

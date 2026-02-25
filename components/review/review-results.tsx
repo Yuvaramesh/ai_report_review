@@ -61,7 +61,7 @@ export default function ReviewResults({
   const partnerProfile = getPartnerProfile(partnerId);
   const profileType = partnerProfile.profileType;
   const strictnessBadgeColor = getStrictnessBadgeColor(
-    partnerProfile.strictness
+    partnerProfile.strictness,
   );
 
   const reviewId = results?.reviewId || "N/A";
@@ -97,7 +97,7 @@ ${
           (e, i) =>
             `${i + 1}. ${
               typeof e === "string" ? e : e?.message || JSON.stringify(e)
-            }`
+            }`,
         )
         .join("\n")}`
     : ""
@@ -110,7 +110,7 @@ ${
           (w, i) =>
             `${i + 1}. ${
               typeof w === "string" ? w : w?.message || JSON.stringify(w)
-            }`
+            }`,
         )
         .join("\n")}`
     : ""
@@ -159,7 +159,7 @@ ${
         const errorData = await response.json();
         console.warn(
           "[v0] Database save warning:",
-          errorData.warning || errorData.error
+          errorData.warning || errorData.error,
         );
       } else {
         console.log("[v0] Review saved to MongoDB successfully");
@@ -175,46 +175,49 @@ ${
     try {
       setIsExporting(true);
 
-      const { jsPDF } = await import("jspdf");
-      const html2canvas = (await import("html2canvas")).default;
+      const { PDFGenerator } = await import("@/lib/export/pdf-generator");
 
-      const element = document.getElementById("pdf-content");
-      if (!element) {
-        throw new Error("PDF content not found");
-      }
+      // Prepare comprehensive review data for PDF
+      const reviewData = {
+        partner: {
+          id: partnerId,
+          name: partnerName,
+          title: profileType,
+        },
+        config: {
+          scope: results?.scope || "full",
+        },
+        errors: errors || [],
+        queries: warnings || [],
+        presentation: results?.presentation || [],
+        parsed: results?.parsed || {},
+        summary: results?.summary || {},
+        timestamp: timestamp,
+        totalFindings:
+          (errors?.length || 0) +
+          (warnings?.length || 0) +
+          (results?.presentation?.length || 0),
+        uploadedFileNames: results?.uploadedFileNames || {},
+      };
 
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        backgroundColor: "#ffffff",
-      });
-      const imgData = canvas.toDataURL("image/png");
+      const generator = new PDFGenerator();
+      const pdfBlob = generator.generatePDF(
+        reviewData,
+        `ai-review-${partnerName.replace(/\s+/g, "-")}-${Date.now()}.pdf`,
+      );
 
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
-
-      const imgWidth = 190;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
-      heightLeft -= 280;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
-        heightLeft -= 280;
-      }
-
-      const filename = `ai-review-${partnerName.replace(
+      // Create download link
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `ai-review-${partnerName.replace(
         /\s+/g,
-        "-"
+        "-",
       )}-${Date.now()}.pdf`;
-      pdf.save(filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3000);
@@ -297,8 +300,8 @@ ${
                 exportSuccess
                   ? "bg-success text-white"
                   : isExporting
-                  ? "bg-primary/50 text-white cursor-not-allowed"
-                  : "bg-primary hover:bg-primary/90 text-white"
+                    ? "bg-primary/50 text-white cursor-not-allowed"
+                    : "bg-primary hover:bg-primary/90 text-white"
               }`}
               disabled={isExporting}
             >
@@ -435,7 +438,7 @@ ${
                       },
                     },
                     null,
-                    2
+                    2,
                   )}
                 </pre>
               </div>

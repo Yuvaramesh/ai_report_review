@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { parseDocumentsWithAI, applyPartnerRules } from "@/lib/review";
 import { extractPDFTextWithFallback } from "@/lib/ai/pdf-extractor";
+import { ReviewEngine } from "@/lib/engine/review-engine";
+import { generateExecutiveSummary } from "@/lib/ai/ai-summarizer";
+import { getPartnerProfile } from "@/lib/utils/partner-utils";
 
 async function fileToBuffer(file: any): Promise<Buffer> {
   if (file == null) throw new Error("No file provided");
@@ -56,7 +59,7 @@ async function fileToBuffer(file: any): Promise<Buffer> {
 async function extractTextFromBuffer(
   buffer: Buffer,
   filename?: string,
-  mime?: string
+  mime?: string,
 ): Promise<string> {
   const header = buffer.slice(0, 8).toString("utf8", 0, 8);
 
@@ -107,7 +110,7 @@ export async function POST(req: Request) {
             "Missing files: accountsFile and trialBalanceFile are required.",
           errors: [],
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -119,12 +122,12 @@ export async function POST(req: Request) {
     const accountsText = await extractTextFromBuffer(
       accountsBuffer,
       (accountsFile as any)?.name,
-      (accountsFile as any)?.type
+      (accountsFile as any)?.type,
     );
     const trialText = await extractTextFromBuffer(
       trialBuffer,
       (trialBalanceFile as any)?.name,
-      (trialBalanceFile as any)?.type
+      (trialBalanceFile as any)?.type,
     );
 
     console.log("[v0] Extracted text lengths:", {
@@ -138,20 +141,49 @@ export async function POST(req: Request) {
     ]);
 
     const partnerId = partnerIdRaw != null ? String(partnerIdRaw) : null;
-    const ruleResults = applyPartnerRules(
-      String(partnerId ?? "unknown"),
-      scope,
-      parsed
+    const partnerIdNum = Number(partnerId) || 1;
+
+    // Run AI-powered review using partner-specific ruleset
+    console.log("[v0] Running review engine for partner:", partnerIdNum);
+    const reviewEngine = new ReviewEngine(partnerIdNum);
+
+    const reviewResults = await reviewEngine.runReview(
+      parsed.documents[0]?.extracted || parsed,
+      parsed.documents[1]?.extracted || parsed,
+      scope || "full",
     );
 
+    // Generate AI executive summary
+    console.log("[v0] Generating AI executive summary...");
+    let summary = "";
+    try {
+      summary = await generateExecutiveSummary(reviewResults, parsed);
+    } catch (summaryErr) {
+      console.warn(
+        "[v0] Summary generation failed, using fallback:",
+        summaryErr,
+      );
+      summary = "Review completed successfully.";
+    }
+
+    const partnerProfile = getPartnerProfile(partnerIdNum);
+
     const response = {
-      partnerId,
-      scope,
+      partnerId: partnerIdNum,
+      scope: scope || "full",
       parsed,
-      rules: ruleResults,
-      errors: ruleResults.errors ?? [],
-      warnings: ruleResults.warnings ?? [],
-      message: "Files received, parsed, and rules applied successfully.",
+      rules: reviewResults,
+      errors: reviewResults.errors ?? [],
+      queries: reviewResults.queries ?? [],
+      presentation: reviewResults.presentation ?? [],
+      summary: {
+        executiveSummary: summary,
+        partnerName: partnerProfile.name,
+        profileType: partnerProfile.profileType,
+        strictness: partnerProfile.strictness,
+      },
+      message: "Files extracted, validated with AI, and reviewed successfully.",
+      totalFindings: reviewResults.totalFindings,
     };
 
     return NextResponse.json(response, { status: 200 });
@@ -160,7 +192,7 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : "Unknown server error";
     return NextResponse.json(
       { error: message, errors: [], warnings: [] },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
