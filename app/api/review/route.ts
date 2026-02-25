@@ -56,7 +56,7 @@ async function fileToBuffer(file: any): Promise<Buffer> {
 async function extractTextFromBuffer(
   buffer: Buffer,
   filename?: string,
-  mime?: string
+  mime?: string,
 ): Promise<string> {
   const header = buffer.slice(0, 8).toString("utf8", 0, 8);
 
@@ -107,7 +107,7 @@ export async function POST(req: Request) {
             "Missing files: accountsFile and trialBalanceFile are required.",
           errors: [],
         },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -119,12 +119,12 @@ export async function POST(req: Request) {
     const accountsText = await extractTextFromBuffer(
       accountsBuffer,
       (accountsFile as any)?.name,
-      (accountsFile as any)?.type
+      (accountsFile as any)?.type,
     );
     const trialText = await extractTextFromBuffer(
       trialBuffer,
       (trialBalanceFile as any)?.name,
-      (trialBalanceFile as any)?.type
+      (trialBalanceFile as any)?.type,
     );
 
     console.log("[v0] Extracted text lengths:", {
@@ -138,10 +138,10 @@ export async function POST(req: Request) {
     ]);
 
     const partnerId = partnerIdRaw != null ? String(partnerIdRaw) : null;
-    const ruleResults = applyPartnerRules(
-      String(partnerId ?? "unknown"),
+    const ruleResults = await applyPartnerRules(
+      String(partnerId ?? "1"),
       scope,
-      parsed
+      parsed,
     );
 
     const response = {
@@ -150,7 +150,9 @@ export async function POST(req: Request) {
       parsed,
       rules: ruleResults,
       errors: ruleResults.errors ?? [],
+      queries: ruleResults.queries ?? [],
       warnings: ruleResults.warnings ?? [],
+      presentation: ruleResults.presentation ?? [],
       message: "Files received, parsed, and rules applied successfully.",
     };
 
@@ -160,7 +162,7 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : "Unknown server error";
     return NextResponse.json(
       { error: message, errors: [], warnings: [] },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

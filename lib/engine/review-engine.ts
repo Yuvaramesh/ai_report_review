@@ -31,44 +31,48 @@ export class ReviewEngine {
   async runReview(
     accountsData: any,
     trialBalance: any,
-    scope = "full"
+    scope = "full",
   ): Promise<ReviewResults> {
     const findings: ReviewFinding[] = [];
 
     if (scope === "full" || scope === "tax") {
       findings.push(
-        ...this.runCategoryRules(accountsData, trialBalance, "taxation")
+        ...this.runCategoryRules(accountsData, trialBalance, "taxation"),
       );
     }
 
     if (scope === "full" || scope === "presentation") {
       findings.push(
-        ...this.runCategoryRules(accountsData, trialBalance, "formatting")
+        ...this.runCategoryRules(accountsData, trialBalance, "formatting"),
       );
       findings.push(
-        ...this.runCategoryRules(accountsData, trialBalance, "pnlPresentation")
+        ...this.runCategoryRules(accountsData, trialBalance, "pnlPresentation"),
       );
     }
 
     if (scope === "full") {
       findings.push(
-        ...this.runCategoryRules(accountsData, trialBalance, "policies")
-      );
-      findings.push(
-        ...this.runCategoryRules(accountsData, trialBalance, "tbReconciliation")
+        ...this.runCategoryRules(accountsData, trialBalance, "policies"),
       );
       findings.push(
         ...this.runCategoryRules(
           accountsData,
           trialBalance,
-          "balanceSheetLogic"
-        )
+          "tbReconciliation",
+        ),
       );
       findings.push(
-        ...this.runCategoryRules(accountsData, trialBalance, "dividends")
+        ...this.runCategoryRules(
+          accountsData,
+          trialBalance,
+          "balanceSheetLogic",
+        ),
       );
       findings.push(
-        ...this.runCategoryRules(accountsData, trialBalance, "disclosures")
+        ...this.runCategoryRules(accountsData, trialBalance, "dividends"),
+      );
+      findings.push(
+        ...this.runCategoryRules(accountsData, trialBalance, "disclosures"),
       );
     }
 
@@ -78,10 +82,10 @@ export class ReviewEngine {
 
     if (this.ruleset.downgradeErrors) {
       const upgraded = errors.filter(
-        (e) => !this.ruleset.presentationOnly.includes(e.id as any)
+        (e) => !this.ruleset.presentationOnly.includes(e.id as any),
       );
       const downgraded = errors.filter((e) =>
-        this.ruleset.presentationOnly.includes(e.id as any)
+        this.ruleset.presentationOnly.includes(e.id as any),
       );
       errors = upgraded as any;
       queries = [
@@ -108,7 +112,7 @@ export class ReviewEngine {
   private runCategoryRules(
     accountsData: any,
     trialBalance: any,
-    category: keyof typeof this.ruleset.rules
+    category: keyof typeof this.ruleset.rules,
   ) {
     const findings: ReviewFinding[] = [];
     const rules = this.ruleset.rules[category];

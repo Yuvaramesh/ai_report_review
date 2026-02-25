@@ -52,7 +52,12 @@ export default function ReviewResults({
   const [savingToDb, setSavingToDb] = useState(false);
 
   const errors = Array.isArray(results?.errors) ? results!.errors : [];
-  const warnings = Array.isArray(results?.warnings) ? results!.warnings : [];
+  const warnings = Array.isArray(results?.queries)
+    ? results!.queries
+    : Array.isArray(results?.warnings)
+      ? results!.warnings
+      : [];
+  const queries = Array.isArray(results?.queries) ? results!.queries : [];
 
   const isReadyForPartner = errors.length === 0;
   const partnerName =
@@ -61,7 +66,7 @@ export default function ReviewResults({
   const partnerProfile = getPartnerProfile(partnerId);
   const profileType = partnerProfile.profileType;
   const strictnessBadgeColor = getStrictnessBadgeColor(
-    partnerProfile.strictness
+    partnerProfile.strictness,
   );
 
   const reviewId = results?.reviewId || "N/A";
@@ -81,8 +86,9 @@ Timestamp: ${timestamp}
 Status: ${isReadyForPartner ? "✓ Ready for Partner" : "⚠ Review Required"}
 
 Findings:
-- Errors: ${errors.length}
-- Warnings: ${warnings.length}
+- Errors (Critical): ${errors.length}
+- Queries/Recommendations: ${queries.length}
+- Presentation Suggestions: ${results?.presentation?.length || 0}
 
 Files Reviewed:
 - Trial Balance: ${results?.uploadedFileNames?.trialBalance || "N/A"}
@@ -97,7 +103,7 @@ ${
           (e, i) =>
             `${i + 1}. ${
               typeof e === "string" ? e : e?.message || JSON.stringify(e)
-            }`
+            }`,
         )
         .join("\n")}`
     : ""
@@ -110,7 +116,7 @@ ${
           (w, i) =>
             `${i + 1}. ${
               typeof w === "string" ? w : w?.message || JSON.stringify(w)
-            }`
+            }`,
         )
         .join("\n")}`
     : ""
@@ -159,7 +165,7 @@ ${
         const errorData = await response.json();
         console.warn(
           "[v0] Database save warning:",
-          errorData.warning || errorData.error
+          errorData.warning || errorData.error,
         );
       } else {
         console.log("[v0] Review saved to MongoDB successfully");
@@ -175,46 +181,50 @@ ${
     try {
       setIsExporting(true);
 
-      const { jsPDF } = await import("jspdf");
-      const html2canvas = (await import("html2canvas")).default;
+      const { PDFGenerator } = await import("@/lib/export/pdf-generator");
 
-      const element = document.getElementById("pdf-content");
-      if (!element) {
-        throw new Error("PDF content not found");
-      }
+      // Prepare comprehensive review data for PDF
+      const reviewData = {
+        partner: {
+          id: partnerId,
+          name: partnerName,
+          title: profileType,
+        },
+        config: {
+          scope: results?.scope || "full",
+        },
+        errors: errors || [],
+        queries: queries || [],
+        warnings: warnings || [],
+        presentation: results?.presentation || [],
+        parsed: results?.parsed || {},
+        summary: results?.summary || {},
+        timestamp: timestamp,
+        totalFindings:
+          (errors?.length || 0) +
+          (queries?.length || 0) +
+          (results?.presentation?.length || 0),
+        uploadedFileNames: results?.uploadedFileNames || {},
+      };
 
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        backgroundColor: "#ffffff",
-      });
-      const imgData = canvas.toDataURL("image/png");
+      const generator = new PDFGenerator();
+      const pdfBlob = generator.generatePDF(
+        reviewData,
+        `ai-review-${partnerName.replace(/\s+/g, "-")}-${Date.now()}.pdf`,
+      );
 
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
-
-      const imgWidth = 190;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
-      heightLeft -= 280;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 10, position, imgWidth, imgHeight);
-        heightLeft -= 280;
-      }
-
-      const filename = `ai-review-${partnerName.replace(
+      // Create download link
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `ai-review-${partnerName.replace(
         /\s+/g,
-        "-"
+        "-",
       )}-${Date.now()}.pdf`;
-      pdf.save(filename);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
       setExportSuccess(true);
       setTimeout(() => setExportSuccess(false), 3000);
@@ -297,8 +307,8 @@ ${
                 exportSuccess
                   ? "bg-success text-white"
                   : isExporting
-                  ? "bg-primary/50 text-white cursor-not-allowed"
-                  : "bg-primary hover:bg-primary/90 text-white"
+                    ? "bg-primary/50 text-white cursor-not-allowed"
+                    : "bg-primary hover:bg-primary/90 text-white"
               }`}
               disabled={isExporting}
             >
@@ -435,7 +445,7 @@ ${
                       },
                     },
                     null,
-                    2
+                    2,
                   )}
                 </pre>
               </div>
@@ -460,52 +470,179 @@ ${
                 </div>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-6">
                 {errors.length > 0 && (
                   <div className="rounded-xl border-2 border-error/30 bg-error/5 dark:bg-error/10 p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <AlertCircle className="h-5 w-5 text-error" />
-                      <h3 className="font-bold text-error">
-                        Errors ({errors.length})
-                      </h3>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-5 w-5 text-error" />
+                        <h3 className="font-bold text-error">
+                          Errors ({errors.length})
+                        </h3>
+                      </div>
                     </div>
-                    <ul className="space-y-2">
+                    <p className="text-xs text-error/70 mb-4">
+                      Critical issues that must be corrected before partner
+                      review
+                    </p>
+                    <div className="space-y-4">
                       {errors.map((err, idx) => (
-                        <li
+                        <div
                           key={idx}
-                          className="text-sm text-neutral-700 dark:text-neutral-300 flex gap-2"
+                          className="rounded-lg border border-error/20 bg-white dark:bg-neutral-900 p-4"
                         >
-                          <span className="text-error">•</span>
-                          {typeof err === "string"
-                            ? err
-                            : err?.message || JSON.stringify(err)}
-                        </li>
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="font-mono text-xs font-bold text-error">
+                              {err.id || `E${idx + 1}`}
+                            </div>
+                            {err.severity && (
+                              <span className="text-xs font-semibold px-2 py-1 rounded bg-error/20 text-error">
+                                {err.severity.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mb-3">
+                            <p className="text-sm font-semibold text-neutral-900 dark:text-white">
+                              {err.issue || err.message || JSON.stringify(err)}
+                            </p>
+                            {err.location && (
+                              <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+                                <span className="font-semibold">Location:</span>{" "}
+                                {err.location}
+                              </p>
+                            )}
+                            {err.tbRef && (
+                              <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                                <span className="font-semibold">
+                                  Reference:
+                                </span>{" "}
+                                {err.tbRef}
+                              </p>
+                            )}
+                          </div>
+                          {err.action && (
+                            <div className="bg-error/10 rounded p-3 border-l-2 border-error">
+                              <p className="text-xs font-semibold text-error mb-1">
+                                Action Required:
+                              </p>
+                              <p className="text-xs text-neutral-700 dark:text-neutral-300">
+                                {err.action}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 )}
 
                 {warnings.length > 0 && (
                   <div className="rounded-xl border-2 border-warning/30 bg-warning/5 dark:bg-warning/10 p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                      <AlertTriangle className="h-5 w-5 text-warning" />
-                      <h3 className="font-bold text-warning">
-                        Warnings ({warnings.length})
-                      </h3>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-5 w-5 text-warning" />
+                        <h3 className="font-bold text-warning">
+                          Queries / Recommendations ({warnings.length})
+                        </h3>
+                      </div>
                     </div>
-                    <ul className="space-y-2">
+                    <p className="text-xs text-warning/70 mb-4">
+                      Questions and recommendations for partner decision or
+                      clarification
+                    </p>
+                    <div className="space-y-4">
                       {warnings.map((w, idx) => (
-                        <li
+                        <div
                           key={idx}
-                          className="text-sm text-neutral-700 dark:text-neutral-300 flex gap-2"
+                          className="rounded-lg border border-warning/20 bg-white dark:bg-neutral-900 p-4"
                         >
-                          <span className="text-warning">•</span>
-                          {typeof w === "string"
-                            ? w
-                            : w?.message || JSON.stringify(w)}
-                        </li>
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="font-mono text-xs font-bold text-warning">
+                              {w.id || `Q${idx + 1}`}
+                            </div>
+                            {w.severity && (
+                              <span className="text-xs font-semibold px-2 py-1 rounded bg-warning/20 text-warning">
+                                {w.severity.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mb-3">
+                            <p className="text-sm font-semibold text-neutral-900 dark:text-white">
+                              {w.query || w.message || JSON.stringify(w)}
+                            </p>
+                            {w.location && (
+                              <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+                                <span className="font-semibold">Location:</span>{" "}
+                                {w.location}
+                              </p>
+                            )}
+                          </div>
+                          {w.evidence && (
+                            <div className="bg-warning/10 rounded p-3 border-l-2 border-warning">
+                              <p className="text-xs font-semibold text-warning mb-1">
+                                Evidence:
+                              </p>
+                              <p className="text-xs text-neutral-700 dark:text-neutral-300">
+                                {w.evidence}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       ))}
-                    </ul>
+                    </div>
+                  </div>
+                )}
+
+                {results?.presentation?.length > 0 && (
+                  <div className="rounded-xl border-2 border-info/30 bg-info/5 dark:bg-info/10 p-6">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-info" />
+                        <h3 className="font-bold text-info">
+                          Presentation Suggestions (
+                          {results.presentation.length})
+                        </h3>
+                      </div>
+                    </div>
+                    <p className="text-xs text-info/70 mb-4">
+                      Optional improvements for formatting, consistency, and
+                      presentation
+                    </p>
+                    <div className="space-y-4">
+                      {results.presentation.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="rounded-lg border border-info/20 bg-white dark:bg-neutral-900 p-4"
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="font-mono text-xs font-bold text-info">
+                              {p.id || `P${idx + 1}`}
+                            </div>
+                          </div>
+                          <div className="mb-3">
+                            <p className="text-sm font-semibold text-neutral-900 dark:text-white">
+                              {p.item}
+                            </p>
+                            {p.location && (
+                              <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-1">
+                                <span className="font-semibold">Location:</span>{" "}
+                                {p.location}
+                              </p>
+                            )}
+                          </div>
+                          {p.suggestion && (
+                            <div className="bg-info/10 rounded p-3 border-l-2 border-info">
+                              <p className="text-xs font-semibold text-info mb-1">
+                                Suggestion:
+                              </p>
+                              <p className="text-xs text-neutral-700 dark:text-neutral-300">
+                                {p.suggestion}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
