@@ -82,8 +82,9 @@ Timestamp: ${timestamp}
 Status: ${isReadyForPartner ? "✓ Ready for Partner" : "⚠ Review Required"}
 
 Findings:
-- Errors: ${errors.length}
-- Warnings: ${warnings.length}
+- Errors (Critical): ${errors.length}
+- Queries/Recommendations: ${queries.length}
+- Presentation Suggestions: ${results?.presentation?.length || 0}
 
 Files Reviewed:
 - Trial Balance: ${results?.uploadedFileNames?.trialBalance || "N/A"}
@@ -189,12 +190,13 @@ ${
           scope: results?.scope || "full",
         },
         errors: errors || [],
-        queries: warnings || [],
+        queries: queries || [],
+        warnings: warnings || [],
         presentation: results?.presentation || [],
         parsed: results?.parsed || {},
         summary: results?.summary || {},
         timestamp: timestamp,
-        totalFindings: (errors?.length || 0) + (warnings?.length || 0) + (results?.presentation?.length || 0),
+        totalFindings: (errors?.length || 0) + (queries?.length || 0) + (results?.presentation?.length || 0),
         uploadedFileNames: results?.uploadedFileNames || {},
       };
 

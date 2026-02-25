@@ -136,22 +136,55 @@ export async function applyPartnerRules(
 
 // Helper functions to extract data from document text
 function extractStatus(text: string): string {
-  const match = text.match(/(draft|final|audit)/i);
-  return match ? match[1].toLowerCase() : "";
+  // Check for DRAFT watermark or status indicators
+  const patterns = [
+    /\bDRAFT\b/i,
+    /draft\s+(?:accounts|financial|statements)/i,
+    /status\s*[:\-]?\s*(draft|final|audit)/i,
+    /\[DRAFT\]/i,
+  ];
+
+  for (const pattern of patterns) {
+    if (pattern.test(text)) {
+      return "DRAFT";
+    }
+  }
+
+  return "";
 }
 
 function extractCompany(text: string): string {
-  const match = text.match(
-    /(company|entity|name)\s*[:\-]?\s*([A-Za-z0-9 &.,-]+)/i
-  );
-  return match ? match[2].trim() : "";
+  // Look for company name in various formats
+  const patterns = [
+    /(?:company|entity|name)\s*[:\-]?\s*([A-Za-z0-9 &.,-]+)/i,
+    /^([A-Za-z0-9 &.,'-]+)\s*(?:Limited|Ltd|Inc|Company|Corp)/im,
+    /([A-Za-z0-9 &.,'-]+)\s+(?:Financial Statements|Accounts)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+  return "";
 }
 
 function extractAccountantName(text: string): string {
-  const match = text.match(
-    /(accountant|accounting firm|firm)\s*[:\-]?\s*([A-Za-z0-9 &.,-]+)/i
-  );
-  return match ? match[2].trim() : "";
+  // Look for accountant name - often appears after "Prepared by" or in footer
+  const patterns = [
+    /(?:prepared by|accountant|accounting firm|firm)\s*[:\-]?\s*([A-Za-z0-9 &.,-]+)/i,
+    /([A-Za-z0-9 &.,'-]+)\s+(?:Accountant|Accounting|Chartered|CPA)/i,
+    /(?:Accountant|Firm):\s*([A-Za-z0-9 &.,-]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+  return "";
 }
 
 function extractAccountantAddress(text: string): string {
@@ -159,9 +192,29 @@ function extractAccountantAddress(text: string): string {
   return match ? match[1].trim() : "";
 }
 
-function extractSections(text: string): string[] {
-  const matches = text.match(/^#{1,3}\s+(.+)$/gm);
-  return matches ? matches.map((m) => m.replace(/^#+\s+/, "")) : [];
+function extractSections(text: string): Record<string, any>[] {
+  const sections: Record<string, any>[] = [];
+  
+  // Find major sections by looking for common headings
+  const headingPatterns = [
+    /(?:directors?\s+)?responsibilities?/i,
+    /auditor(?:s|'s)?\s+report/i,
+    /financial\s+(?:position|statements)/i,
+    /balance\s+sheet/i,
+    /(?:profit|loss)\s+(?:and\s+loss)?/i,
+    /cash\s+flow/i,
+  ];
+
+  headingPatterns.forEach((pattern) => {
+    if (pattern.test(text)) {
+      sections.push({
+        title: pattern.source,
+        found: true,
+      });
+    }
+  });
+
+  return sections;
 }
 
 function extractPolicies(text: string): string[] {
